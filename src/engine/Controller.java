@@ -3,6 +3,7 @@
  * Created 14 June 2012
  * Renamed 30 August 2012
  * Substantially reworked for antipheromone experiments Nov / Dec 2015
+ * Added to a GitHub Repository 25 July 2016
  * 
  */
 
