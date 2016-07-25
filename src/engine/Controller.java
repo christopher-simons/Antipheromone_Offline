@@ -333,7 +333,8 @@ public class Controller
 
   
     /**
-     * run the ant colony search
+     * run the ant colony optimisation search
+     * @param runNumber of runs for ACO search
      */
     public void run( int runNumber )
     {
@@ -481,8 +482,6 @@ public class Controller
                 
                 // 7 December 2015
                 batchResults.bestCombinedOverRuns[ runNumber ][ i ] = this.bestSoFarCombined;
-                
-                
             }
                 
             // make ready for next iteration
@@ -514,7 +513,6 @@ public class Controller
         
         long runAfter = System.currentTimeMillis( );
         long runTime = runAfter - runBefore;
-        DecimalFormat df = new DecimalFormat( "0.000" );
         System.out.print( " run number " + runNumber + " done" );
         System.out.println(" in " + df.format( runTime / 1000.0 ) + " seconds" );
     }
