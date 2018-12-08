@@ -16,6 +16,7 @@ import problem.ProblemController;
 import softwareDesign.CLSClass;
 import softwareDesign.EleganceDesign;
 import myUtils.Utility;
+import problem.TSP;
 
 
 /**
@@ -402,12 +403,14 @@ public class DaemonOperators
         
         // calculate CBO as a minimisation function       
         final double CBO = 1.0 - ( (double) internalUses / (double) numberOfUses );
-        assert CBO >= 0.0;
+        assert CBO > 0.0;
         assert CBO <= 1.0;
 
 //        if( CBO == 0.0 )
 //        {
-//            System.out.println("In Daemon operators, line 404, CBO is: " + CBO );
+//            System.out.println("In Daemon operators, line 404, CBO is: " + CBO + "  " + 
+//                                "internal uses is: " + internalUses + "  " +
+//                                "number of uses is: " + numberOfUses);
 //        }
         
         path.setCBO( CBO );
@@ -521,6 +524,55 @@ public class DaemonOperators
         return result;
     }
     
+    // 16 September 2018
+    public static void calculateTSPSolutionPathLength( 
+        Path path, 
+        ProblemController problemController )
+    {
+        assert path != null;
+        assert problemController != null;
+        
+        // get the first node in the path
+        Node current = path.get( 0 );
+        int currentNodeNumber = current.getNumber( );
+        
+        Node next = null;
+        Iterator< Node > it = path.iterator( );
+
+        double runningTotal = 0.0;
+        int counter = 0;
+        
+        final TSP tsp = problemController.getTSP( );
+        assert tsp != null;
+        final double[ ][ ] distances = tsp.getDistances( );
+        assert distances != null;
+        
+        while( it.hasNext( ) )
+        {
+            if( counter == 0 )
+            {
+                // do nothing, we already have the first node...
+            }
+            else
+            {
+                next = it.next( );
+
+                final int nextNodeNumber = next.getNumber( );
+
+                // calculate the distance for the edge
+                final double edgeDistance = distances[ currentNodeNumber ][ nextNodeNumber ];
+                runningTotal += edgeDistance;
+
+                // advance through the nodes of the path
+                current = next;
+                currentNodeNumber = current.getNumber( );
+            }
+            counter++;
+        }
+        
+        assert runningTotal > 0.0;
+        path.setTSPathLength( runningTotal );
+    }
     
 }   // end class
 

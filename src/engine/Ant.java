@@ -9,10 +9,11 @@ package engine;
 
 import config.AlgorithmParameters;
 import config.Parameters;
+import static engine.Ant.END_OF_CLASS;
 import java.util.*;
-import pheromone.AlphaTable;
+import pheromone.AlphaMatrix;
 import myUtils.Utility;
-import softwareDesign.CLSClass;
+import problem.*;
 
 /**
  *
@@ -30,20 +31,25 @@ public class Ant
     /** size of the amList i.e. number of methods and attributes */
     protected final int amListSize;
     
+    /** reference to list of attributes */
+    protected List< Attribute>  attributeList;
+    
+    /** number of methods in software design */
+    protected List< Method > methodList;
+    
     /** number of classes in software design */
     protected final int numberOfClasses;
     
     /** reference to the table of pheromone values */
-    protected AlphaTable alphaTable;
+    protected AlphaMatrix alphaTable;
     
     /** current path, node by node */
     protected Path currentPath; 
     
-    /** list of classes that user elects to 'freeze' */
-    protected List< CLSClass> freezeList;
-    
     /** is this ant handling constraints? */
     protected boolean handlingConstraints;
+    
+    protected final List< Node > tspNodes;
     
     /** 
      * validity of solution path
@@ -54,29 +60,39 @@ public class Ant
     
     /** state of the generated path as we iterate */
     private enum State { start, inAClass, atEoC, invalid };
+
+    /** instance variable for state of path being generated */
+    protected State state;   
     
     /** 
      * constructor
-     * @param reference to list of attributes and methods
-     * @param number of classes
-     * @param reference to alpha table
-     * @param list of classes that user elects to "freeze"
-     * @param handling constraints boolean
+     * @param nodes - reference to list of nodes
+     * @param attributeList - reference to list of attributes
+     * @param methodList - reference to list of attributes
+     * @param numberOfClasses
+     * @param at - reference to alpha matrix
+     * @param handlingConstraints - boolean
+     * @param tspNodes - list of nodes for TSP
      */
     public Ant( List< Node > nodes,
+                List< Attribute > attributeList,
+                List< Method > methodList,
                 int numberOfClasses,
-                AlphaTable at,
-                List< CLSClass > freezeList,
-                boolean handlingConstraints )
+                AlphaMatrix at,
+                boolean handlingConstraints,
+                List< Node > tspNodes )
     {
         assert nodes != null;
         this.amList = nodes;
+        assert attributeList != null;
+        this.attributeList = attributeList;
+        assert methodList != null;
+        this.methodList = methodList;
+        assert numberOfClasses >= 0;
+        this.numberOfClasses = numberOfClasses;
         assert at != null;
         this.alphaTable = at; 
-        assert freezeList != null;
-        this.freezeList = freezeList;
-        assert numberOfClasses > 0;
-        this.numberOfClasses = numberOfClasses;
+        assert tspNodes != null;
         
         amListSize = amList.size( );
         
@@ -84,6 +100,8 @@ public class Ant
         valid = false;
         
         this.handlingConstraints = handlingConstraints;
+        this.tspNodes = tspNodes;
+       
     }
     
     /**
@@ -92,48 +110,93 @@ public class Ant
      */
     public void generateSolution( )
     {
-        assert amList.size( ) > 0;
+        assert amList.size( ) >= 0;
         
-        // create a new path though the environment  
-        // to which path can be added
-        Path path = new Path( new DesignPathRole( ) );
-        
-        // create local node variables for path construction
-        Node current = null;
-        Node next = null;
-        
-        // the first node is always the nest
-        current = new Nest( "nest", 0 );
-        path.add( current );
-        
-        // secondly, construct the path with elements from 'frozen' classes 
-        constructFromFrozenClasses( path );
-        
-        // now create a working list of all possible remaining elements
-        // i.e. attributes, methods and ( end of classes - 1 )
-        // coz the last node must be an EndOfClass
-        // 20 July 2012
-        // working list amended to work with all elements
-        // EXCEPT those in frozen classes
-        final int numberOfElementsFrozen = getNumberOfElementsFrozen( );
-        
+        // First, create a working list of all possible elements
         List< Node > workingList = createWorkingList( );
         final int workingListSize = workingList.size( );
-        final int numberOfEoCUsed = this.freezeList.size( );
-        assert workingListSize == 
-            amListSize - numberOfElementsFrozen + ( numberOfClasses - 1 - numberOfEoCUsed ):
-                "working list size is: " + workingListSize +
-                ", am list size is: " + amListSize +
-                ", number of classes is: " + numberOfClasses + 
-                ", numberOfElementsFrozen is: " + numberOfElementsFrozen;
         
-        // then node by node, construct the remaining path 
-        // depending on the attractiveness of each possibility
+        if( Parameters.problemNumber == Parameters.TSP_BERLIN52 )
+        {
+            assert workingListSize == TSP_Berlin52.NUMBER_OF_CITIES;
+        }
+        else if( Parameters.problemNumber == Parameters.TSP_ST70 )
+        {
+            assert workingListSize == TSP_ST70.NUMBER_OF_CITIES;
+        }
+        else if( Parameters.problemNumber == Parameters.TSP_RAT99 )
+        {
+            assert workingListSize == TSP_RAT99.NUMBER_OF_CITIES;
+        }
+        else if( Parameters.problemNumber == Parameters.TSP_RAT195 )
+        {
+            assert workingListSize == TSP_RAT195.NUMBER_OF_CITIES;
+        }
+        else
+        {
+            assert workingListSize == amListSize + ( numberOfClasses - 1);
+        }
+        
+        // now create a solution path though the environment  
+        // that can be added to 'this'
+        
+        Path path = null;
+        Node current = null;
+        Node next = null;
         int nodeCounter = 0;
+        int numberOfCities = 0;
+        
+        // if the problem instance is a TSP...
+        if( Parameters.problemNumber == Parameters.TSP_BERLIN52 || 
+            Parameters.problemNumber == Parameters.TSP_ST70 ||
+            Parameters.problemNumber == Parameters.TSP_RAT99 ||   
+            Parameters.problemNumber == Parameters.TSP_RAT195 )  
+        {
+            if( Parameters.problemNumber == Parameters.TSP_BERLIN52 )
+            {
+                numberOfCities = TSP_Berlin52.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_ST70 )
+            {
+                numberOfCities = TSP_ST70.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_RAT99 )
+            {
+                numberOfCities = TSP_RAT99.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_RAT195 )
+            {
+                numberOfCities = TSP_RAT195.NUMBER_OF_CITIES;
+            }
+            else
+            {
+                assert false : "impossible TSP problem!";
+            }
+            
+            path = new Path( );
+            // classic TSP - select first city at random
+            final int index = Utility.getRandomInRange( 0, numberOfCities - 1 );
+            assert index >= 0;
+            assert index < workingList.size( );
+            current = workingList.remove( index );
+        }    
+        else // must be a software design problem instance    
+        {   
+            path = new Path( new DesignPathRole( ) );
+            // the first node is always the nest
+            current = new Nest( "nest", 0 );
+        }
+        path.add( current );
+     
+        
         while( workingList.isEmpty( ) == false )
         {
             // select the next node, according to attractiveness
             next = selectNextNode( current, workingList, nodeCounter );
+            
+            // 7 August 2018
+//            next = selectNextValidNodeTracking( 
+//                current, workingList, nodeCounter, attsLeft, metsLeft, eocLeft );
             
             // add the next node to the solution path
             path.add( next );
@@ -141,66 +204,86 @@ public class Ant
             // and so the ant moves through the environment
             current = next;
             
+            // update the counters
             nodeCounter++;
         }
         
         assert workingList.isEmpty( );
-        assert path.size( ) == workingListSize + numberOfElementsFrozen + 1 + numberOfEoCUsed:
-            "working list size is: " + workingListSize +
-            "path size is " + path.size( );
                 
-        // the last node is always an end of class
-        path.add( new EndOfClass( END_OF_CLASS, workingListSize + 1 ) );
-        
-        // lastly assert invariance,
-        // i.e. the number of EndOfClasses == number of classes
-        
-        assert( path.size( ) == amList.size( ) + this.numberOfClasses + 1 /* for the nest */ );
-        
-        if( Parameters.SOLUTION_GENERATION_ROBUSTNESS_CHECK == true )
+        if( Parameters.problemNumber == Parameters.CBS ||
+            Parameters.problemNumber == Parameters.GDP ||
+            Parameters.problemNumber == Parameters.RANDOMISED ||
+            Parameters.problemNumber == Parameters.SC    )
         {
-            Iterator< Node > it = path.iterator( );
-            int counter = 0;
-            while( it.hasNext( ) ) 
-            {
-                Node node = it.next( );
+            assert path.size( ) == workingListSize + 1 /* for the nest */:
+                "working list size is: " + workingListSize +
+                "path size is " + path.size( );
+            
+            // the last node is always an end of class
+            path.add( new EndOfClass( END_OF_CLASS, workingListSize + 1 ) );
+            assert( path.size( ) == amList.size( ) + this.numberOfClasses + 1 /* for the nest */ );
 
-                if( node instanceof EndOfClass )
-                {
-                    counter++;
-                }
-            }
-
-            String s = "";
-            Iterator< Node > it2 = path.iterator( );
-            if( counter != this.numberOfClasses )
+            if( Parameters.SOLUTION_GENERATION_ROBUSTNESS_CHECK == true )
             {
-                while( it2.hasNext( ) )
+                Iterator< Node > it = path.iterator( );
+                int counter = 0;
+                while( it.hasNext( ) ) 
                 {
-                    Node node = it2.next( );
-                    s += ( node.getName( ) + " " + node.getNumber( ) + " ," ); 
+                    Node node = it.next( );
+
                     if( node instanceof EndOfClass )
                     {
-                        System.out.println( s );
-                        s = "";
+                        counter++;
                     }
                 }
+
+                String s = "";
+                Iterator< Node > it2 = path.iterator( );
+                if( counter != this.numberOfClasses )
+                {
+                    while( it2.hasNext( ) )
+                    {
+                        Node node = it2.next( );
+                        s += ( node.getName( ) + " " + node.getNumber( ) + " ," ); 
+                        if( node instanceof EndOfClass )
+                        {
+                            System.out.println( s );
+                            s = "";
+                        }
+                    }
+                }
+                assert counter == this.numberOfClasses;
             }
-            assert counter == this.numberOfClasses;
+        }
+        else /// must be TSP problem instance
+        {
+            assert path.size( ) == numberOfCities:
+                "number of cities in path is: " + path.size( );
+            
+            // go show the nodes of a solution path
+//            Iterator< Node > it = path.iterator( );
+//            while( it.hasNext( ) )
+//            {
+//                Node n = it.next( );
+//                System.out.print( n.getNumber( ) + " " );
+//            }
+//            System.out.println( " " );        
         }
         
-        // when solution path is constructed, assign it to 
+        // after solution path is constructed, assign it to 
         // the current vertices instance variable 
         this.currentPath = path;
         
         // 2 Feb 2016
-        this.valid = checkValidity( path );
-        
-        this.currentPath.setValid( this.valid );
-        
- 
-
+        if( Parameters.problemNumber != Parameters.TSP_BERLIN52 )
+        {
+            this.valid = checkValidity( path );
+            this.currentPath.setValid( this.valid );
+        }
     }
+    
+    
+    
     
     /**
      * create a working list of path elements containing
@@ -211,6 +294,48 @@ public class Ant
     protected List< Node > createWorkingList( )
     {
         List< Node > workingList = new ArrayList<  >( );
+        
+        // EITHER create a working list for a TSP problem...
+        int numberOfCities = 0;
+        if( Parameters.problemNumber == Parameters.TSP_BERLIN52 || 
+            Parameters.problemNumber == Parameters.TSP_ST70 ||
+            Parameters.problemNumber == Parameters.TSP_RAT99 || 
+            Parameters.problemNumber == Parameters.TSP_RAT195 )   
+        {
+            if( Parameters.problemNumber == Parameters.TSP_BERLIN52 )
+            {
+                numberOfCities = TSP_Berlin52.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_ST70 )
+            {
+                numberOfCities = TSP_ST70.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_RAT99 )
+            {
+                numberOfCities = TSP_RAT99.NUMBER_OF_CITIES;
+            }
+            else if( Parameters.problemNumber == Parameters.TSP_RAT195 )
+            {
+                numberOfCities = TSP_RAT195.NUMBER_OF_CITIES;
+            }
+            else
+            {
+                assert false: "impossible TSP Problem!";
+            }
+            assert numberOfCities > 0;
+            
+            for( int i = 0; i < numberOfCities; i++ )
+            {
+                Node node = new Node( );
+                node.setNumber( i );
+                workingList.add( node );
+            }
+            
+            assert( workingList.size( ) == numberOfCities );
+            return workingList;
+        }
+        
+        // ...OR create working list for a software design problem instance
         
         // easy bit - add the attributes and methods
         assert this.amList.isEmpty( ) == false;
@@ -237,28 +362,25 @@ public class Ant
             
             assert node != null;
             
-            if( isInAFrozenClass( node ) == false )
-            {       
-                workingList.add( node );
-            }
+            workingList.add( node );
         }
         
         // at this point, the working list must be the 
         // same size as the attribute and method list size
-        assert workingList.size( ) == amListSize - getNumberOfElementsFrozen( ); 
-//        System.out.println("working list size is: " + workingList.size( ) );
-        
+        assert workingList.size( ) == amListSize; 
         
         // tricky bit now - last node is always an EndOfClass
         // and this is done in the calling method. 
         // Thus add (number of classes - 1) EndOfClasses to working list
+        
         // 24 July 2012
         // frozen classes are done first and have already used up their
         // end of class nodes
         int counter = amListSize + 1;
         int i = 0;
-        final int numberOfEoCUsed = this.freezeList.size( );
-        final int numberOfEndOfClasses = ( this.numberOfClasses - 1 ) - numberOfEoCUsed;
+        
+        //final int numberOfEoCUsed = this.freezeList.size( );
+        final int numberOfEndOfClasses = ( this.numberOfClasses - 1 );
         
         for( i = 0; i < numberOfEndOfClasses; i++ )
         {
@@ -266,8 +388,7 @@ public class Ant
         }
         
         assert counter == amListSize + numberOfEndOfClasses + 1;
-        assert workingList.size( ) == 
-            ( amListSize - getNumberOfElementsFrozen( ) ) + numberOfEndOfClasses;
+        assert workingList.size( ) == amListSize + numberOfEndOfClasses;
         
         // for testing
 //        System.out.println( "this is the working list" );
@@ -288,7 +409,7 @@ public class Ant
      * @return the next node 
      */
     protected Node selectNextNode( 
-        Node current, List< Node > workingList, int nodeCounter )
+       Node current, List< Node > workingList, int nodeCounter )
     {
         assert current != null;
         assert workingList != null;
@@ -476,7 +597,7 @@ public class Ant
                 }
                 else
                 {
-                    assert true : "invalid state";
+                    assert false : "invalid state";
                 }
             }
             else if( node instanceof Method )
@@ -497,7 +618,7 @@ public class Ant
                 }
                 else
                 {
-                    assert true : "invalid state";
+                    assert false : "invalid state";
                 }           
             }
             else if ( node instanceof EndOfClass )
@@ -542,103 +663,7 @@ public class Ant
         return this.currentPath;
     }
     
-    /**
-     * add nodes to the path based on the frozen class(es)
-     * @param path 
-     */
-    protected void constructFromFrozenClasses( Path path )
-    {
-        assert path != null;
-        // precondition: must already contain the "nest"
-        assert path.size( ) == 1;
-        
-        // keep a count of nodes we've added to the path
-        int nodeCount = 1;
-        
-        // the element numbers in the path are one more than 
-        // in the amlist because of the "nest"
-        
-        for( CLSClass c : this.freezeList )
-        {
-            List< Method > mList = c.getMethodList( );
-            for( Method m : mList )
-            {
-                path.add( new Method( m.getName( ), m.getNumber( ) + 1 ) );
-                nodeCount++;
-            }
-            
-            List< Attribute > aList = c.getAttributeList( );
-            for( Attribute a : aList )
-            {
-                path.add( new Attribute( a.getName( ), a.getNumber( ) + 1 ) );
-                nodeCount++;
-            }
-            
-            nodeCount++;
-            path.add( new EndOfClass( END_OF_CLASS, nodeCount ) );
-        }
-    }
     
-    
-    protected int getNumberOfElementsFrozen( )
-    {
-        assert this.freezeList != null;
-        int result = 0;
-        
-        for( CLSClass c : this.freezeList )
-        {
-            List< Method > mList = c.getMethodList( );
-            result += mList.size( );
-            
-            List< Attribute > aList = c.getAttributeList( );
-            result += aList.size( );
-        }
-        
-        return result;
-    }
-    
-    protected boolean isInAFrozenClass( Node node )
-    {
-        assert node != null;
-        assert this.freezeList != null;
-        boolean result = false;
-        
-        for( CLSClass c : this.freezeList )
-        {
-            if( node instanceof Method )
-            {
-                List< Method > mList = c.getMethodList( );
-                
-                for( Method m : mList )
-                {
-                    if( m.getNumber( ) == node.getNumber( ) )
-                    {
-                        result = true;
-                        break;
-                    }
-                }
-            }
-            else if( node instanceof Attribute )
-            {
-                List< Attribute > aList = c.getAttributeList( );
-                
-                for( Attribute a : aList )
-                {
-                    if( a.getNumber( ) == node.getNumber( ) )
-                    {
-                        result = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                assert false : "impossible type of node";
-            }
-        }
-        
-        return result;
-    }
 
     /**
      * apply heuristic information via beta.
@@ -652,6 +677,276 @@ public class Ant
     {
         return temp;
     }
+    
+
+    
+    
+    
+   /**
+     * select the next valid node based on 
+     * (i) pheromone 'attractiveness' and (ii) 1+1 constraint
+     * by tracking numbers of attributes and methods
+     * 8 August 2018
+     * @param current - the current node
+     * @param workingList - the working list of path
+     * @param nodeCounter - the node counter
+     * @param attCounter - the attribute counter
+     * @param metCounter - the method counter
+     * @param eocCounter - the EndofClass counter
+     * @return the next node 
+     */
+    protected Node selectNextValidNodeTracking( 
+       Node current, 
+       List< Node > workingList, 
+       int nodeCounter,
+       int attCounter,
+       int metCounter,
+       int eocCounter )
+    {
+        assert current != null;
+        assert workingList != null;
+        assert workingList.size( ) > 0;
+        assert nodeCounter >= 0;
+        assert attCounter >= 0;
+        assert metCounter >= 0;
+        assert eocCounter >= 0;
+
+        final int workingListSize = workingList.size( );
+        
+        // handle the situation where the ant reaches the end of the path
+        // i.e there's only ONE node left in the list 
+        if( workingListSize == 1 )
+        {
+            Node result = workingList.remove( 0 );
+            assert workingList.isEmpty( );
+            return result;
+        }
+        
+        // else there must be more than one node to select from!
+        assert workingList.size( ) > 1;
+        
+        // and so let's choose it!
+        final int currentNodeNumber = current.getNumber( );
+        
+        // prepare a fitness proportionate node selection mechanism
+        // implemented by a "roulette wheel" approach
+        double[ ] probabilities = new double[ workingListSize ];
+        double sum = 0.0;
+        
+        // for each node in the working list,
+        // get the probability related to
+        // 'from' the current node (x axis in the table)
+        // 'to' all possible path (y axis in the table)
+        for( int i = 0; i < workingListSize; i++ )
+        {
+            int workingListNodeNumber = workingList.get( i ).getNumber( );
+           
+            final double temp = this.alphaTable.getProbabilityAt( currentNodeNumber, workingListNodeNumber );
+            double prob = temp;
+            
+            probabilities[ i ] = prob; 
+            
+            sum += probabilities[ i ];
+        }
+        
+        boolean invalid = true;
+        int selectedIndex = 0;
+        
+        int loopCounter = 0;
+        while( invalid )
+        {
+            loopCounter++;
+            // spin the "roulette wheel" to get a random number...
+            double random = Utility.getRandomInRange( 0.0, sum );
+            assert random >= 0.0;
+            assert random <= sum;
+
+            double runningTotal = 0.0;
+            boolean finished = false;
+         
+
+            // select a node depending on probability
+            for( int j = 0; j < workingListSize && ! finished; j++ )
+            {
+                runningTotal += probabilities[ j ];
+
+                if( runningTotal < random )
+                {
+                    // do nothing, continue...
+                }
+                else
+                {
+                    finished = true;
+                    selectedIndex = j;
+                }
+            }
+            
+            Node n = workingList.get( selectedIndex );
+            String s = "";
+            if( n instanceof Method && metCounter <= eocCounter )
+            {
+                // we try again, leaving invalid flag true
+                s = "method";
+            }
+            else if( n instanceof Attribute && attCounter <= eocCounter )
+            {
+                // again we try again, leaving invalid flag true
+                s = "attribute";
+            }
+            else
+            {
+                invalid = false;
+            }
+            System.out.print( "invalid: " + invalid + ", " );
+            System.out.print( "node: " + s + ", " );
+            System.out.print( "working list size: " + workingList.size( ) + ", " );
+            System.out.print( "loopCounter:  " + loopCounter + ", " );
+            System.out.print( "metCounter:  " + metCounter + ", " );
+            System.out.print( "attCounter:  " + attCounter + ", " );
+            System.out.println( "eocCounter:  " + eocCounter + ", " );
+            
+        }
+        
+//        System.out.print("out of loop and j is: " + j + "," );
+//        System.out.println("and selected index is: " + selectedIndex );
+//        System.out.println( " " );
+        
+        assert selectedIndex >= 0;
+        assert selectedIndex < workingListSize :
+                "selected index is: " + selectedIndex + 
+                " working list size is: " + workingListSize;
+        
+        // return and remove the selected node in the working list
+        return workingList.remove( selectedIndex );       
+    }
+    
+    
+   
+    /**
+     * 8 June 2017
+     * select a node from either the AM list or the EoC List at random
+     * @param current
+     * @param amList
+     * @param eocList
+     * @param nodeCounter
+     * @return 
+     */
+    private Node selectNextFromEither( Node current, List< Node > amList, List< Node > eocList, int nodeCounter )
+    {
+        assert current != null;
+        assert amList != null;
+        // assert amList.size( ) > 0;
+        assert eocList != null;
+        assert eocList.size( ) > 0;
+        assert nodeCounter >= 0;
+        
+        final int amListSize = amList.size( );
+        final int eocListSize = eocList.size( );
+        final int combinedSize = amListSize + eocListSize;
+        
+        final int currentNodeNumber = current.getNumber( );
+        
+        // prepare a fitness proportionate node selection mechanism
+        // implemented by a "roulette wheel" approach
+        double[ ] probabilities = new double[ amListSize + eocListSize ];
+        double sum = 0.0;
+        
+        // for each node in the list, get the probability related to:
+        // 'from' the current node (x axis in the table)
+        // 'to' all possible path (y axis in the table)
+        for( int i = 0; i < amListSize; i++ )
+        {
+            int amListNodeNumber = amList.get( i ).getNumber( );
+            final double prob = this.alphaTable.getProbabilityAt( currentNodeNumber, amListNodeNumber );
+            probabilities[ i ] = prob; 
+            sum += probabilities[ i ];
+        }
+        
+        // and the same for the eocList...
+        for( int i = 0; i < eocListSize; i++ )
+        {
+            int oecListNodeNumber = eocList.get( i ).getNumber( );
+            final double prob = this.alphaTable.getProbabilityAt( currentNodeNumber, oecListNodeNumber );
+            probabilities[ i ] = prob; 
+            sum += probabilities[ i ];
+        }
+        
+        // now spin the "roulette wheel" to get a random number...
+        double random = Utility.getRandomInRange( 0.0, sum );
+        assert random >= 0.0;
+        assert random <= sum;
+        
+        double runningTotal = 0.0;
+        boolean finished = false;
+        int selectedIndex = 0;
+        
+        // select a node depending on probability
+        for( int j = 0; j < combinedSize && ! finished; j++ )
+        {
+            runningTotal += probabilities[ j ];
+            
+            if( runningTotal < random )
+            {
+                // do nothing, continue...
+            }
+            else
+            {
+                finished = true;
+                selectedIndex = j;
+            }
+        }
+        
+//        System.out.print("out of loop and j is: " + j + "," );
+//        System.out.println("and selected index is: " + selectedIndex );
+//        System.out.println( " " );
+        
+        assert selectedIndex >= 0;
+        assert selectedIndex < combinedSize :
+                "selected index is: " + selectedIndex + 
+                " and combined size is: " + amListSize;
+        
+        Node result = null;
+        
+        if( selectedIndex < amListSize )
+        {
+            result = amList.remove( selectedIndex );
+            assert result != null : "error selecting node from AM list. Selected index is: " + selectedIndex;
+            this.state = State.inAClass; // state remains the same
+        }
+        else // must be in the eoc list
+        {
+            result = eocList.remove( selectedIndex );
+            assert result != null : "error selecting node from EoC list. " + "\n"
+                                    + "Selected index is: " + selectedIndex + "\n"
+                                    + "AM alist size is : " + amListSize + "\n"
+                                    + "EoC list size is: " + eocListSize; 
+            this.state = State.atEoC;
+        }
+        
+        // return and remove the selected node in the working list
+        return result;
+    }
+    
+    /**
+     * show the nodes of the current path
+     * 21 June 2017
+     */
+    public void showPath( ) 
+    {
+        Iterator< Node > it = currentPath.iterator( );
+        while( it.hasNext( ) )
+        {
+            Node n = it.next( );
+            
+            int number = n.getNumber( );
+            String name = n.getName( );
+            
+            System.out.println( number + " " + name + "\n");
+        }
+        System.out.println("END OF PATH");
+    }
+    
+   
     
 }   // end class
 

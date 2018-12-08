@@ -14,6 +14,7 @@ package problem;
  */
 
 
+import config.Parameters;
 import java.io.*;
 import java.util.*;
 
@@ -63,6 +64,11 @@ public class ProblemController
     // otherwise the number of classes required is held here
     public static final int VARIABLE_CLASS_NUMBER = 0;
     
+    // the problem that we're dealing with at the moment
+    private int currentProblemInstance = 0; 
+    
+    // reference to either Berlin52 or ST70
+    private TSP tsp; 
         
     /** Creates a new instance of ProblemController */
     public ProblemController() 
@@ -75,9 +81,11 @@ public class ProblemController
         useMatrix = null;   // must generate use table first!!
         numberOfUses = 0;
         
-        
         numberOfActionsForReload = 0;
         numberOfDataForReload = 0;
+        currentProblemInstance = 0;
+        
+        tsp = null;
     }
     
     /** create design problem number 5 
@@ -87,6 +95,7 @@ public class ProblemController
     {
         DesignProblem5CBS dp5 = new DesignProblem5CBS( this );
         dp5.assembleDesignProblem5( );
+        this.currentProblemInstance = Parameters.CBS;
 
 //        this.showActionsAndData( );
     }
@@ -98,6 +107,7 @@ public class ProblemController
     {
         DesignProblem6SC dp6 = new DesignProblem6SC( this );
         dp6.assembleDesignProblem6( );
+        this.currentProblemInstance = Parameters.SC;
     }
     
     /** 
@@ -108,17 +118,62 @@ public class ProblemController
     {
         DesignProblem7GDP dp7 = new DesignProblem7GDP( this );
         dp7.assembleDesignProblem7( );
+        this.currentProblemInstance = Parameters.GDP;
     }
     
     /** 
      *  create design problem number 8 
-     *  Graduate Development Program (GDP)
+     *  Randomised
      */
     public void createDesignProblem8( )
     {
         DesignProblem8Randomised dp8 = new DesignProblem8Randomised( this );
         dp8.constructRandomisedDesignProblem8( );
+        this.currentProblemInstance = Parameters.RANDOMISED;
     }
+    
+    // 23 September 2018
+    public void createTSPBerlin52Problem( )
+    {
+        this.tsp = new TSP_Berlin52( );
+        this.tsp.configure( );
+//        this.tsp.showDistances( );
+        this.currentProblemInstance = Parameters.TSP_BERLIN52;
+    }
+    
+    public final TSP getTSP( )
+    {
+        assert this.tsp != null;
+        return tsp;
+    }
+    
+    // 22 November 2018
+    public void createTSPST70Problem( )
+    {
+        this.tsp = new TSP_ST70( );
+        this.tsp.configure( );
+        this.tsp.showDistances( );
+        this.currentProblemInstance = Parameters.TSP_ST70;
+    }
+    
+    // 23 November 2018
+    public void createTSPRAT99Problem( )
+    {
+        this.tsp = new TSP_RAT99( );
+        this.tsp.configure( );
+        this.tsp.showDistances( );
+        this.currentProblemInstance = Parameters.TSP_RAT99;
+    }
+ 
+    // 23 November 2018
+    public void createTSPRAT195Problem( )
+    {
+        this.tsp = new TSP_RAT195( );
+        this.tsp.configure( );
+        this.tsp.showDistances( );
+        this.currentProblemInstance = Parameters.TSP_RAT195;
+    }
+    
     
     /**
      * get a handle on the list of unique actions
@@ -717,7 +772,13 @@ public class ProblemController
          assert actionNumber == actionList.size( );
      }
       
-      
+     public int getCurrentProblemInstance( )
+     {
+         assert this.currentProblemInstance >= 0;
+         assert this.currentProblemInstance <= Parameters.NUMBER_OF_PROBLEMS;
+         return this.currentProblemInstance;
+     }
+     
 }   // end of class
 
 //------- end of file -------------------------------------

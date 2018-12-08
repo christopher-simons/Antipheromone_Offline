@@ -6,11 +6,12 @@ package heuristics;
 
 import config.AlgorithmParameters;
 import engine.Ant;
+import engine.Attribute;
 import engine.EndOfClass;
 import engine.Method;
 import engine.Node;
 import java.util.List;
-import pheromone.AlphaTable;
+import pheromone.AlphaMatrix;
 import pheromone.PheromoneOperators;
 import problem.ProblemController;
 import softwareDesign.CLSClass;
@@ -33,13 +34,17 @@ public class HeuristicAnt2 extends Ant
      */
     public HeuristicAnt2( 
         List< Node > nodes,
+        List< Attribute > attributeList,
+        List< Method > methodList,
         int numberOfClasses,
-        AlphaTable at,
+        AlphaMatrix at,
         List< CLSClass > freezeList,
         boolean handlingConstraints,
-        int[ ][ ] useMatrix )
+        int[ ][ ] useMatrix,
+        List< Node > tspNodes )
     {
-        super( nodes, numberOfClasses, at, freezeList, handlingConstraints );
+        //super( nodes, numberOfClasses, at, freezeList, handlingConstraints );
+        super( nodes, attributeList, methodList, numberOfClasses, at, handlingConstraints, tspNodes );
         this.useMatrix = useMatrix; 
     }
 

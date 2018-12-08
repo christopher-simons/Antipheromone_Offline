@@ -7,99 +7,67 @@ package config;
 /**
  * @author Chris Simons
  */
-
 public class AlgorithmParameters 
 {
-    public static final int SIMPLE_ACO = 1;
-    public static final int MMAS = 2;
-    public static int algorithm = SIMPLE_ACO;
-
-    // MMAS MAX and MIN Pheromone levels
-    public static final double MMAS_PHEROMONE_MINIMUM = 0.5;
-    public static final double MMAS_PHEROMONE_MAXIMUM = 3.5;
-    
-    public enum PheromoneUpdate { SO, ParetoBased };
-//    public static PheromoneUpdate pheromoneUpdate = PheromoneUpdate.ParetoBased;
-    public static PheromoneUpdate pheromoneUpdate = PheromoneUpdate.SO;
-    
-//    public enum SOUpdate { CBO, NAC, COMBINED };
-//    public static SOUpdate sOUpdate = SOUpdate.CBO;
-//    public static SOUpdate sOUpdate = SOUpdate.NAC;
-//    public static SOUpdate sOUpdate = SOUpdate.COMBINED;
-    
-    // 27 November 2017
-    public static final int CBO = 1;
-    public static final int NAC = 2;
-    public static final int COMBINED = 3;
-    public static int fitness = CBO;
-    
-    
-    // used in PheromoneOperators to calculate delta
-    public static boolean objectiveCBO = true;
-    public static boolean objectiveNAC = true;
-    public static boolean objectiveATMR = false;
-    
-    public static boolean evaporationElitism = true;
-    public static boolean replacementElitism = true;
-    
-    // to ensure only valid paths are generated
-    public static boolean constraintHandling = false;
-    
-    
-    private static final double DEFAULT_ALPHA = 1.5; 
-    public static double ALPHA = DEFAULT_ALPHA; 
-    
-    private static final double DEFAULT_MU = 3.0; 
-    public static double MU = DEFAULT_MU;   
-    
-    public static final double SimpleACO_RHO = 0.1;  // for S-ACO
-    // for MMAS. Dorogo and Stutzle, page 91, suggest 0.02
-    public static final double MMAS_RHO = 0.035; 
-    public static double RHO = MMAS_RHO;
-    
-    private static final int DEFAULT_NUMBER_OF_ANTS = 100;
-    public static int NUMBER_OF_ANTS = DEFAULT_NUMBER_OF_ANTS;
+    public static final int NUMBER_OF_ANTS = 100;
     
     public static final int NUMBER_OF_EVALUATIONS = 100000;
     
-    //private static final int MAX_ITERATIONS = 1000;
     public static int NUMBER_OF_ITERATIONS = NUMBER_OF_EVALUATIONS / NUMBER_OF_ANTS;
-    // public static int NUMBER_OF_ITERATIONS = 1;
     
+    public static final int SIMPLE_ACO = 1;
+    public static final int MMAS = 2;
+    public static int algorithm = MMAS;
     
-    // INTERACTIVE MODE ONLY parameters -----------------------------
-    // 9 April 2013
-    // public static final double INTERACTIVE_INTERVAL_CONSTANT = 100;
-    public static final double INTERACTIVE_INTERVAL_CONSTANT = 200;
-    
-    // for start of dynamic interactive multi-objective search
-    public static final double INITIAL_wCBO = 1.0;
-    public static final double INITIAL_wNAC = 0.0;
-    public static final double INITIAL_wATMR = 0.0;
-    public static final double INITIAL_wCOMBINED = 0.0;
+    public static final int CBO = 1;
+    public static final int NAC = 2;
+    public static final int COMBINED = 3;
+    public static final int TSP_PATH_LENGTH = 4;
+    public static int fitness = TSP_PATH_LENGTH;
 
-    // BATCH MODE ONLY parameters -----------------------------------
-    // testing in batch mode, 19 September 2012
-    // set these values when in pareto based pheromone update mode
-    public static double weightCBO = 0.0;
-    public static double weightNAC = 0.0;
-    public static double weightATMR = 0.0;
-    public static double weightCOMBINED = 0.0;
+    // to ensure only valid paths are generated
+    public static boolean constraintHandling = false;
     
-   
+    // alpha - parameter controlling pheromone attractiveness during solution path generation
+    public static final double ALPHA_SD = 1.5; 
+    public static final double ALPHA_TSP = 1.5; 
+    public static double alpha = 0.0; // alpha value is set up in BatchMain
+            
+    // mu - parameter controlling MMAS update
+    public static final double MU_SD = 3.0;
+    public static final double MU_TSP = 1.0; 
+    public static double mu = 0.0; // mu value is set up in BatchMain   
     
-    // 15 January 2013
-//    public static final int HEURISTICS_OFF = 0;
-//    public static final int HEURISTICS_CBO_ONLY = 1;
-//    public static final int HEURISTICS_NAC_ONLY = 2;
-//    public static final int HEURISTICS_BOTH = 3;
-//    
+    // RHO - pheromone decay coeffient
+    public static final double SimpleACO_RHO = 0.1;  // for S-ACO
+    // for MMAS, Dorogo and Stutzle book, page 91, suggests 0.02(!)
+    public static final double MMAS_RHO_SD = 0.035; 
+    public static final double MMAS_RHO_TSP = 0.045;
+    public static double rho = 0.0; // rho value is set up in BatchMain
+    
+    // MMAS MAX and MIN Pheromone limit levels
+    public static final double MMAS_PHEROMONE_MAXIMUM_SD = 3.5;
+    public static final double MMAS_PHEROMONE_MINIMUM_SD = 0.5;
+    public static final double MMAS_PHEROMONE_MAXIMUM_TSP = 2.5;
+    public static final double MMAS_PHEROMONE_MINIMUM_TSP = 0.0;
+    public static double MMAS_Mmax = 0.0; // set up in BatchMain 
+    public static double MMAS_Mmin = 0.0; // set up in BatchMain 
+    
     // flag to signal exploitation of heuristic information
     public static boolean heuristics = false;
     
     // parameters controlling influence of heuristic information
     public static double BETA_CBO = 1.0;
     public static double BETA_NAC = 1.0;
+    
+    // used in PheromoneOperators to calculate delta
+    // and by the elitist replacement archive
+    public static boolean objectiveCBO = true;
+    public static boolean objectiveNAC = true;
+    public static boolean objectiveATMR = false;
+    
+    public static boolean evaporationElitism = true;
+    public static boolean replacementElitism = false;
     
     
     // 4 December 2015
@@ -118,25 +86,35 @@ public class AlgorithmParameters
     public final static double NACScaleForSC = 10;
     public final static double NACScaleForRANDOMISED = 8;
     
-    // 8 January 2016
-    public static int ANTIPHEROMONE_PHASE_THRESHOLD_PERCENTAGE = 0;
+    // parameter controlling the percentage of iterations at which 
+    // antipheromone is applied, for both algorithms
+    public static int antiPheromonePhasePercentage = 0;
     
-    // 15 January 2016
-    public static boolean SIMPLE_ACO_MONTGOMERY_SUBTRACTIVE_ANTIPHEROMONE = false;
-    public static final int SIMPLE_ACO_MONTGOMERY_SUBTRACTIVE_ANTIPHEROMONE_HALF = 0;
-    public static final int SIMPLE_ACO_MONTGOMERY_SUBTRACTIVE_ANTIPHEROMONE_MINIMAL = 1;
-    public static int Simple_ACO_Montgomery_Subtractive_Antipheromone_Value = SIMPLE_ACO_MONTGOMERY_SUBTRACTIVE_ANTIPHEROMONE_HALF;
+    // Simple-ACO related parameters
+    public static boolean SIMPLE_ACO_SUBTRACTIVE_ANTIPHEROMONE = false;
     
+    public static final double SIMPLE_ACO_PHI_HALF = 0.5;
+    public static final double SIMPLE_ACO_PHI_MINIMAL = 0.1;
+    public static final double SIMPLE_ACO_PHI_ZERO = 0.0;
+    public static final double PHI = SIMPLE_ACO_PHI_MINIMAL;
     
-    public static double SIMPLE_ACO_RHO_ANTIPHEROMONE_HALF = 0.5;
-    public static double SIMPLE_ACO_RHO_ANTIPHEROMONE_MINIMAL = 0.1;
-    public static double SIMPLE_ACO_RHO_ANTIPHEROMONE_ZERO = 0.0;
+    // MMAS related pheromone parameters 
+    public static final int MMAS_PHEROMONE_SINGLE = 1;
+    public static final int MMAS_PHEROMONE_DOUBLE = 2;
+    public static final int MMAS_PHEROMONE_TRIPLE = 3;
+    public static int pheromoneStrength = MMAS_PHEROMONE_SINGLE;
     
-    // 20 January 2016
-    public static boolean MMAS_SUBTRACTIVE_ANTIPHEROMONE = true;
-    public static double MMAS_RHO_ANTIPHEROMONE_HALF = 0.5;
+    // MMAS related antipheromone parameters
+    public static final boolean MMAS_ANTIPHEROMONE = true;
+    public static final boolean MMAS_REDUCE_BY_HALF = false;
+   
+    public static final int ANTIPHEROMONE_STRENGTH_SINGLE = 1;
+    public static final int ANTIPHEROMONE_STRENGTH_DOUBLE = 2;
+    public static final int ANTIPHEROMONE_STRENGTH_TRIPLE = 3;
+    public static int antipheromoneStrength = ANTIPHEROMONE_STRENGTH_SINGLE;
     
-    
-}   // end class
+    // MMAS related antipheromone interference prevention parameter
+    public static boolean preventInterference = true;
+}  
 
 // ------ end of file -----------------------------------------

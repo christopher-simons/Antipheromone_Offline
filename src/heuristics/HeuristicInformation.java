@@ -25,16 +25,16 @@ public class HeuristicInformation
      * set up the heuristic information.
      * assuming no 'frozen' classes (TODO later)
      * 
-     * @param numberOfAttributes
-     * @param numberOfMethods
+     * @param numAttributes
+     * @param numMethods
      * @param numberOfClasses 
      */
     public static void setUp( 
         int numAttributes, int numMethods, int numberOfClasses )
     {
-        assert numAttributes > 0; 
-        assert numMethods > 0;
-        assert numberOfClasses > 0;
+        assert numAttributes >= 0; 
+        assert numMethods >= 0;
+        assert numberOfClasses >= 0;
         
         numberOfAttributes = numAttributes;
         numberOfMethods = numMethods;
@@ -42,8 +42,16 @@ public class HeuristicInformation
         final int total = numberOfAttributes + numberOfMethods;
         
         // yes! I know this is integer division; but we want an integer
-        idealNumberOfElementsPerClass = total / numberOfClasses;
-        remainderElements = total % numberOfClasses;
+        if( numberOfClasses != 0 )
+        {
+            idealNumberOfElementsPerClass = total / numberOfClasses;
+            remainderElements = total % numberOfClasses;
+        }
+        else
+        {
+            idealNumberOfElementsPerClass = 0;
+            remainderElements = 0;
+        }
     }
 
 }   // end class

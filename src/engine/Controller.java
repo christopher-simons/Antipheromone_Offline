@@ -4,7 +4,7 @@
  * Renamed 30 August 2012
  * Substantially reworked for antipheromone experiments Nov / Dec 2015
  * Added to a GitHub Repository 25 July 2016
- * 
+ * Substantially reworked for further antipheromone experiments June / July 2018 
  */
 
 package engine;
@@ -17,73 +17,52 @@ package engine;
 import config.AlgorithmParameters;
 import config.Parameters;
 import daemonActions.DaemonOperators;
-import heuristics.HeuristicAnt2;
 import heuristics.HeuristicInformation;
 import java.text.DecimalFormat;
 import java.util.*;
-import javax.swing.JOptionPane;
-import learning.Coefficients;
-import learning.IterationInformation;
-import learning.RegressionAgent;
-import myGui.VisualiseEvaluateDialog;
-import myUtils.Utility;
-import myUtils.Weights;
-import net.sourceforge.openforecast.Observation;
-import pareto.ParetoOperators;
-import pheromone.AlphaTable;
-import pheromone.PheromoneOperators;
-import pheromone.PheromoneTable;
-import problem.CLSAction;
-import problem.CLSDatum;
-import problem.ProblemController;
+import myUtils.PathComparatorForFcombined;
+import myUtils.PathComparatorForTSP;
+import pheromone.*;
+import problem.*;
 import reporting.BatchResults;
-import reporting.InteractiveResults;
-import reporting.MultiObjectiveResults;
-import softwareDesign.CLSClass;
-import softwareDesign.EleganceDesign;
 
 
 public class Controller
 {
-    /** number of iterations of search */
-    private final int NUMBER_OF_ITERATIONS;
-        
-    /** number of ants in colony */
-    private final int NUMBER_OF_ANTS;
-        
-    /** maximum number of attempts to produce a valid solution */
-    // 22 Jan 2013 double number when using coupling heuristics only
-    private final int MAXIMUM_ATTEMPTS = 100;
-
-    /** list (set) of attributes of the software design */
-    private List< Attribute > attributeList;
+    /** list of attributes in the software design */
+    private final List< Attribute > attributeList;
     
-    /** list (set) of methods in the software design */
-    private List< Method > methodList;
+    /** list of methods in the software design */
+    private final List< Method > methodList;
 
-    /** list of all the attributes and methods in the colony */
-    private List< Node > amList; 
+    /** list of all the attributes and methods in the problem */
+    private final List< Node > amList; 
     
     /** number of classes in software design */
     private static int numberOfClasses;
 
     /** the colony, which contains all the solution paths */
-    private List< Path > colony;
+    private final List< Path > colony;
+    
+    /** for sorting of the colony based on Fcomb 19 July 2017 */
+    Path pathArray[ ];
     
     /** the table containing all the pheromone values */
-    private PheromoneTable pheromoneTable;
+    private PheromoneMatrix pheromoneTable;
     
     /** the elite archive */
     private Stack< Path > eliteArchive;
     
-    /** the problem controller, for use table */
+    /** reference to the problem controller, for use table */
     private ProblemController problemController;
+    
+    // list of nodes for TSP 16 September 2018
+    private List< Node > tspNodes;
     
     /** best so far values */
     private double bestSoFarCBO;
     private double bestSoFarEleganceNAC;
     private double bestSoFarEleganceATMR;
-    private double bestSoFarEleganceModularity;
     private double bestSoFarCombined;
 
     /** best so far indices into colony */
@@ -110,21 +89,21 @@ public class Controller
     private Path bestPathInColonyNAC;
     private Path bestPathInColonyATMR;
     private Path bestPathInColonyCombined;
+    // 26 June 2018
+    private Path secondBestPathInColonyCombined;
+    private Path thirdBestPathInColonyCombined;
+    
     
     // 07 Jan 2016
     private Path worstPathInColonyCBO;
     private Path worstPathInColonyNAC;
     private Path worstPathInColonyCombined;
+    // 25 July 2017
+    private Path secondWorstPathInColonyCombined;
+    private Path thirdWorstPathInColonyCombined;
     
     // 2 Feb 2016
     private int maxInvalids;
-    
-    
-    /** 
-     * counter for best in colony to present to user
-     * fitness function counter, or ffCounter
-     */
-    private static int ffCounter = 0;
     
     // 30 May 2012
     private int[ ] numberOfRetries;
@@ -132,11 +111,7 @@ public class Controller
     
     /** interaction interval */
     private int interval;
-    
-    // 31 August 2012
-    /** interactiveResults over interactive search */
-    private InteractiveResults interactiveResults;
-    
+   
     /** interactiveResults of batch, non-interactive search */
     private BatchResults batchResults;
     
@@ -146,13 +121,33 @@ public class Controller
     /** in batch mode, average run time for each run */
     private long[ ] averageRunTimes;
     
+    // 28 August 2018
+    private double areaAt50;
+    private double areaAt100;
+    private double areaAt150;
+    private double areaAt200;
+    private double areaAt300;
+    private double areaAt400;
+    
+    // 17 Spetember 2018
+    private Path bestTSPPathInColony;
+    private int bestTSPIndex;
+    private double bestSoFarTSPPathLength;
+    
+    private Path secondBestTSPPathInColony;
+    private Path thirdBestTSPPathInColony;
+    
+    private Path worstTSPPathInColony;
+    private Path secondWorstTSPPathInColony;
+    private Path thirdWorstTSPPathInColony;
+    
+    
     /** the decimal format for all doubles used by the controller */
     private DecimalFormat df;
     
     /**
      * constructor
      * @param problemController
-     * @param mode
      */
     public Controller( ProblemController problemController )
     {
@@ -163,14 +158,7 @@ public class Controller
         attributeList = new ArrayList<  >( );
         methodList = new ArrayList<  >( );
         
-        // update local parameter information 
-        NUMBER_OF_ITERATIONS = AlgorithmParameters.NUMBER_OF_ITERATIONS;
-        NUMBER_OF_ANTS = AlgorithmParameters.NUMBER_OF_ANTS;
         
-        initialiseLists( problemController );
-        // for testing only
-//        showLists( );   
-
         numberOfClasses = problemController.getNumberOfClasses( );
         
         // 14 Jan 2013
@@ -178,13 +166,19 @@ public class Controller
             this.attributeList.size( ), this.methodList.size( ), Controller.numberOfClasses );
         
         colony = new ArrayList< >( );
+        
+        // 17 July 2017
+        pathArray = new Path[ AlgorithmParameters.NUMBER_OF_ANTS ];
+        
         eliteArchive = new Stack< >( );
+        
+        // 16 September 2018
+        tspNodes = new ArrayList< >( );
         
         // set best so far values to arbitrary value
         bestSoFarCBO = 100.0;
         bestSoFarEleganceNAC = 100.0;
         bestSoFarEleganceATMR = 100.0;
-        bestSoFarEleganceModularity = 0.0;
         bestSoFarCombined = 100.0;
         bestCBOIndex = 0;
         bestNACIndex = 0;
@@ -196,6 +190,8 @@ public class Controller
         bestPathInColonyNAC = null;
         bestPathInColonyATMR = null;
         bestPathInColonyCombined = null;
+        secondBestPathInColonyCombined = null;
+        thirdBestPathInColonyCombined = null;
         
         worstSoFarCBO = 100.0;
         worstSoFarNAC = 100.0;
@@ -208,87 +204,118 @@ public class Controller
         worstPathInColonyCBO = null;
         worstPathInColonyNAC = null;
         worstPathInColonyCombined = null;
-        
+        secondWorstPathInColonyCombined = null;
+        thirdWorstPathInColonyCombined = null;
         maxInvalids = 0;
         
         // 30 May 2012
-        numberOfRetries = new int[ NUMBER_OF_ITERATIONS ];
-        averageAttempts = new double[ NUMBER_OF_ITERATIONS ];
+        numberOfRetries = new int[ AlgorithmParameters.NUMBER_OF_ITERATIONS ];
+        averageAttempts = new double[ AlgorithmParameters.NUMBER_OF_ITERATIONS ];
         
-        for( int i = 0; i < NUMBER_OF_ITERATIONS; i++ )
+        for( int i = 0; i < AlgorithmParameters.NUMBER_OF_ITERATIONS; i++ )
         {
             numberOfRetries[ i ] = 0;
             averageAttempts[ i ] = 0.0;
         }
     
         interval = 0;
+             
+        // set up results for batch mode
+        batchResults = new BatchResults( AlgorithmParameters.NUMBER_OF_ITERATIONS, Parameters.NUMBER_OF_RUNS );
+
+         /** in batch mode, run time for each iteration */
+        iterationRunTimes = new long[ AlgorithmParameters.NUMBER_OF_ITERATIONS ];
+
+        /** in batch mode, average run time for each run */
+        averageRunTimes = new long[ Parameters.NUMBER_OF_RUNS ];
+
+        // 28 August 2018
+        areaAt50 = 0.0;
+        areaAt100 = 0.0;
+        areaAt150 = 0.0;
+        areaAt200 = 0.0;
+        areaAt300 = 0.0;
+        areaAt400 = 0.0;
         
-        if( Parameters.mode == Parameters.Mode.Interactive )
-        {
-            interactiveResults = new InteractiveResults( );
-            batchResults = null;
-            iterationRunTimes = null;
-            averageRunTimes = null;        
-        }
-        else    // must be batch mode
-        {
-            interactiveResults = null;
-            
-            // run search multiple times in batch mode
-            batchResults = new BatchResults( NUMBER_OF_ITERATIONS, Parameters.NUMBER_OF_RUNS );
-            
-             /** in batch mode, run time for each iteration */
-            iterationRunTimes = new long[ NUMBER_OF_ITERATIONS ];
-    
-            /** in batch mode, average run time for each run */
-            averageRunTimes = new long[ Parameters.NUMBER_OF_RUNS ];
-        }
+        // 17 September 2018
+        bestTSPPathInColony = null;
+        secondBestTSPPathInColony = null;
+        thirdBestTSPPathInColony = null;
+        
+        bestSoFarTSPPathLength = 999999999.0; // arbitrarily high value
+        bestTSPIndex = 0; // arbtrarily low value
+        
+        worstTSPPathInColony = null;
+        secondWorstTSPPathInColony = null;
+        thirdWorstTSPPathInColony = null;
+        
         
         df = new DecimalFormat( "0.000" );
         
+        initialiseLists( problemController );
+        // for testing only
+//        showLists( );   
+
     }
     
     /**
-     * initialize the lists of attributes, methods, vertices
+     * initialise the lists of attributes, methods, vertices
      * @param problemController 
      */
     private void initialiseLists( ProblemController problemController )
     {
         assert problemController != null;   
-        int counter = 0;
         
-        // set up attributes
-        Iterator< CLSDatum > datumIt = problemController.getDatumList( );
         
-        while( datumIt.hasNext( ) )
+        if( Parameters.problemNumber == Parameters.TSP_BERLIN52 )
         {
-            CLSDatum datum = datumIt.next( );
-            final String name = datum.getName( ); 
-            attributeList.add( new Attribute( name, counter ) );
-            amList.add( new Attribute( name, counter ) );
-            counter++;
+            assert this.tspNodes != null;
+            
+            for( int i = 0; i < TSP_Berlin52.NUMBER_OF_CITIES; i++ )
+            {
+                Node node = new Node( );
+                node.setNumber( i );
+                boolean added = this.tspNodes.add( node );
+                assert added == true;
+            }
         }
-        
-        assert attributeList.size( ) == 
-            problemController.getNumberOfUniqueData( );
-        
-        // set up methods
-        Iterator< CLSAction > actionIt = problemController.getActionList( );
-        
-        while( actionIt.hasNext( ) )
+        else // must be a software design problem instance
         {
-            CLSAction action = actionIt.next( );
-            final String name = action.getName( ); 
-            methodList.add( new Method( name, counter ) );
-            amList.add( new Method( name, counter ) );
-            counter++;
+            int counter = 0;
+
+            // set up attributes
+            Iterator< CLSDatum > datumIt = problemController.getDatumList( );
+
+            while( datumIt.hasNext( ) )
+            {
+                CLSDatum datum = datumIt.next( );
+                final String name = datum.getName( ); 
+                attributeList.add( new Attribute( name, counter ) );
+                amList.add( new Attribute( name, counter ) );
+                counter++;
+            }
+
+            assert attributeList.size( ) == 
+                problemController.getNumberOfUniqueData( );
+
+            // set up methods
+            Iterator< CLSAction > actionIt = problemController.getActionList( );
+
+            while( actionIt.hasNext( ) )
+            {
+                CLSAction action = actionIt.next( );
+                final String name = action.getName( ); 
+                methodList.add( new Method( name, counter ) );
+                amList.add( new Method( name, counter ) );
+                counter++;
+            }
+
+            assert methodList.size( ) ==
+                problemController.getNumberOfUniqueActions( );
+            assert amList.size( ) ==
+                problemController.getNumberOfUniqueData( ) +
+                problemController.getNumberOfUniqueActions( );    
         }
-        
-        assert methodList.size( ) ==
-            problemController.getNumberOfUniqueActions( );
-        assert amList.size( ) ==
-            problemController.getNumberOfUniqueData( ) +
-            problemController.getNumberOfUniqueActions( );    
     }
     
     
@@ -339,246 +366,132 @@ public class Controller
     public void run( int runNumber )
     {
         assert runNumber >= 0;
+        //System.out.println("in run number: " + runNumber );
         
         long before = 0;
         long after = 0;
         long iterationTime = 0;
-        double iterationTimeInSeconds = 0.0;
         
         long runBefore = System.currentTimeMillis( );
 
         // create a new Pheromone table for each run
-        pheromoneTable = new PheromoneTable( amList, numberOfClasses, problemController );
+        pheromoneTable = new PheromoneMatrix( amList, numberOfClasses, problemController );
 //        pheromoneTable.show( );
-        
-        Weights weights = null;
-        if( Parameters.mode == Parameters.mode.Interactive )
-        {
-            // for start of dynamic interactive multi-objective search
-            weights = new Weights(
-                AlgorithmParameters.INITIAL_wCBO,
-                AlgorithmParameters.INITIAL_wNAC,
-                AlgorithmParameters.INITIAL_wATMR,
-                AlgorithmParameters.INITIAL_wCOMBINED );
-        }
-        else    // must be in batch mode
-        {
-            // all weights set to zero initially
-            weights = new Weights( );
-            
-            // 8 December 2015
-            // using single-objective in batch mode, so set up weights once
-            if( AlgorithmParameters.fitness == AlgorithmParameters.CBO )
-            {
-                weights.weightCBO = 1.0;
-            }    
-            else if( AlgorithmParameters.fitness == AlgorithmParameters.NAC )
-            {
-                weights.weightNAC = 1.0;
-            }    
-            else if( AlgorithmParameters.fitness == AlgorithmParameters.COMBINED )
-            {
-                weights.weightCOMBINED = 1.0;
-            }    
-            else
-            {
-                assert false: "impossible fitness to weights!";
-            }
-        }
-        
-        // list of classes that user elects to "freeze"
-        List< CLSClass > freezeList = new ArrayList< >( ); 
-        
-        // the archive for designs user selects to put away
-        List< EleganceDesign > archive = new ArrayList< >( );
-        
-        // create a new archive for the new run
-        this.eliteArchive = new Stack< >( );
-        
-        int interactionCounter = 1;
-        
-        boolean halted = false;
+    
+        // clear out the archive for the new run
+        this.eliteArchive.clear( );
         
         // perform ACO search until iterations are terminated
-        for( int i = 0; i < NUMBER_OF_ITERATIONS && halted == false; i++  )
+        for( int i = 0; i < AlgorithmParameters.NUMBER_OF_ITERATIONS; i++  )
         {
             before = System.currentTimeMillis( );
             
-            // Iteration information used in interactive mode
-            IterationInformation information = new IterationInformation( );
-            
-            AlphaTable alphaTable = new AlphaTable( this.pheromoneTable, AlgorithmParameters.ALPHA );
+            AlphaMatrix alphaTable = new AlphaMatrix( this.pheromoneTable, AlgorithmParameters.alpha );
 
-            // now begin the classic ant colony optimisation loop
+            // the classic ant colony optimisation loop
             
-            generateSolutions( i, alphaTable, freezeList );
+            generateSolutions( i, alphaTable );
             
-            if( AlgorithmParameters.replacementElitism == true ) { elitistInsert( ); }
+            // use if want to update with a best-so-far approach, based on CBO or NAC
+            // only for software design problem instances
+            if( AlgorithmParameters.replacementElitism == true ) { elitistReplace( ); }
             
             daemonActions( );
             
-            pheromoneUpdate( weights, i );
+            BestPathsMatrix bpm = new BestPathsMatrix( pheromoneTable.size( ) );
+            pheromoneUpdate( i, bpm );
             
-            if( Parameters.mode == Parameters.mode.Interactive )
-            {
-                if( checkForInteraction( ) == true )
-                {
-                    int userAction = performInteraction(
-                        weights, 
-                        freezeList, 
-                        i, 
-                        interactionCounter, 
-                        information,
-                        archive );
-
-                    interactionCounter++; 
-
-                    if( userAction == JOptionPane.CANCEL_OPTION ) // we're finished now!
-                    {
-                        halted = true;
-                    }
-                }
-            }
-            else // mode == Mode.batch
-            {
-                // do nothing, coz there is no interaction in batch mode
-            }
-            
+            // record iteration information
             after = System.currentTimeMillis( );
             assert after >= before : "after is: " + after + ", before is: " + before;
             iterationTime = after - before;
-            iterationTimeInSeconds = iterationTime / 1000.0; // convert to seconds
+            this.iterationRunTimes[ i ] = iterationTime;
+                
+            // copy fitness values to batch results structure for eventual writing to file 
+            batchResults.bestDesignCouplingOverRuns[ runNumber ][ i ] = this.bestSoFarCBO;
+            batchResults.bestEleganceNACOverRuns[ runNumber ][ i ] = this.bestSoFarEleganceNAC;
+            batchResults.bestCombinedOverRuns[ runNumber ][ i ] = this.bestSoFarCombined;
             
-            if( Parameters.mode == Parameters.Mode.Interactive )
+            // 28 June 2018
+            // copy solution generation retry and attempt information to batch results structure for writing to file
+            for( int j = 0; j < this.numberOfRetries.length; j++ )
             {
-                interactiveResults.transferResults(i, 
-                    this.bestSoFarCBO, 
-                    this.bestSoFarEleganceNAC,
-                    this.bestSoFarEleganceATMR,
-                    this.bestSoFarEleganceModularity,
-                    weights.weightCBO,
-                    weights.weightNAC,
-                    weights.weightATMR,
-                    information.mad,
-                    information.designerEvaluation,
-                    iterationTimeInSeconds,
-                    information.archived,
-                    information.classFrozen,
-                    information.classUnfrozen,
-                    halted );
+                batchResults.retriesOverRuns[ runNumber ][ j ] = this.numberOfRetries[ j ];
+                batchResults.averageAttemptsOverRuns[ runNumber ][ j ] = this.averageAttempts[ j ];
             }
-            else    // must be in batch mode
+            
+            // 18 September 2018, for software design problem instances only
+            if( Parameters.problemNumber == Parameters.CBS ||
+                Parameters.problemNumber == Parameters.GDP || 
+                Parameters.problemNumber == Parameters.RANDOMISED ||
+                Parameters.problemNumber == Parameters.SC )
             {
-                this.iterationRunTimes[ i ] = iterationTime;
-                
-                // commented out 7 December 2015
-                // batchResults.averageDesignCouplingOverRuns[ runNumber ][ i ] = this.iterationAverageCBO;
-                // batchResults.bestEleganceATMROverRuns[ runNumber ][ i ] = this.bestSoFarEleganceATMR;
-                // batchResults.bestEleganceModularityOverRuns[ runNumber ][ i ] = this.bestSoFarEleganceModularity;
-                
-                
-                batchResults.bestDesignCouplingOverRuns[ runNumber ][ i ] = this.bestSoFarCBO;
-                batchResults.bestEleganceNACOverRuns[ runNumber ][ i ] = this.bestSoFarEleganceNAC;
-                
-                // 7 December 2015
-                batchResults.bestCombinedOverRuns[ runNumber ][ i ] = this.bestSoFarCombined;
+                // 23 August 2018. Snapshots, and area under the cost curve
+                calculateSnapshots( runNumber, i );
+                // 8 August 2018 
+                investigateInterference( runNumber, i );
             }
-                
-            // make ready for next iteration
+            
+            // all done, so lastly make ready for next iteration
             if( AlgorithmParameters.replacementElitism == true ) { updateEliteArchive( ); }
             clearEnvironment( ); 
-
+            
         }   // end for each iteration
 
-        if( Parameters.mode == Parameters.Mode.Interactive )
-        {
-    //        interactiveResults.showRawResults( );
-            interactiveResults.writeFinalResultsToFile( );
-        }
-        else    // must be in batch mode
-        {
-            double average = myUtils.Utility.average( this.iterationRunTimes );
-            long temp = Math.round( average );
-            this.averageRunTimes[ runNumber ] = temp;
+        
+        
+        // record run information
+        double average = myUtils.Utility.average( this.iterationRunTimes );
+        long temp = Math.round( average );
+        this.averageRunTimes[ runNumber ] = temp;
             
-            // 19 September 2012 - to assess front diversity
-//            doMultiObjectiveValues( freezeList );
-            
-            // 2 Feb 2016
-            batchResults.maxNumberOfInvalids[ runNumber ] = this.maxInvalids;
-        }
-       
+        // 2 Feb 2016
+        batchResults.maxNumberOfInvalids[ runNumber ] = this.maxInvalids;
+        
+        batchResults.bestCombinedValueAt50OverRuns[ runNumber ] = this.bestSoFarCombined;
+        
+        // 18 September 2018 for TSP
+        batchResults.bestTSPLength[ runNumber ] = this.bestSoFarTSPPathLength;
+        batchResults.whenBestTSPLengthFound[ runNumber ] = this.bestTSPIndex;
+        
         // at the end, show the pheromone table
         //this.pheromoneTable.show( );
         
         long runAfter = System.currentTimeMillis( );
         long runTime = runAfter - runBefore;
-        System.out.print( " run number " + runNumber + " done" );
-        System.out.println(" in " + df.format( runTime / 1000.0 ) + " seconds" );
+        
+        
+        System.out.print( " run number " + ( runNumber + 1 ) + " done in " );
+        System.out.println( df.format( runTime / 1000.0 ) + " seconds" );
     }
     
-    /**
-     * for use in batch mode only
-     * after the iterations are complete, use the pheromone
-     * table to generate a set of ants (solutions).
-     * Then construct a multi-objective results object
-     * and use it to write to file. 
-     * @param freezeList 
-     */
-    private void doMultiObjectiveValues( List< CLSClass > freezeList )
-    {
-        
-        AlphaTable at = new AlphaTable( this.pheromoneTable, AlgorithmParameters.ALPHA );
-        generateSolutions( 0, at, freezeList );
-        // get the use table in readiness
-        SortedMap< String, List< CLSDatum > > useTable =
-            problemController.getUseTable( );    
-        // for each path in the colony
-        Iterator< Path > it = colony.iterator( ); 
-        // get the path, and construct a software design
-        while( it.hasNext( ) )
-        {
-            Path path = it.next( );
-            // calculate coupling, NAC elegance, ATMR elegance
-            DaemonOperators.calculateDesignSolutionPathFitness( 
-                path, useTable );
-        }
-        MultiObjectiveResults moResults = new MultiObjectiveResults( this.colony );
-        moResults.transfer( this.colony );
-        moResults.writeToFile( ); 
-        clearEnvironment( );
-    }
+    
     
     /**
      * construction phase
      * @param iteration counter
      * @param alpha table
-     * @param list of classes that user elects to freeze
      */
     private void generateSolutions( 
         int iterationCounter, 
-        AlphaTable alphaTable, 
-        List< CLSClass > freezeList )
+        AlphaMatrix alphaMatrix )
     { 
-        assert alphaTable != null;
-        assert freezeList != null;
+        assert alphaMatrix != null;
         assert problemController != null;
         
         int retries = 0;
         int attemptTotal = 0;
                 
-        for( int i = 0; i < NUMBER_OF_ANTS; i++ )
+        for( int i = 0; i < AlgorithmParameters.NUMBER_OF_ANTS; i++ )
         {
-            Ant ant = null;
-            
-            // ant = new HeuristicAnt2( /* 8 January 2016 */
-            ant = new Ant( 
-                    amList, 
-                    numberOfClasses, 
-                    alphaTable, 
-                    freezeList, 
-                    AlgorithmParameters.constraintHandling );  
-                    // this.problemController.getUseMatrix( ) );
+            Ant ant = new Ant( 
+                    this.amList,
+                    this.attributeList,
+                    this.methodList,
+                    this.numberOfClasses, 
+                    alphaMatrix, 
+                    AlgorithmParameters.constraintHandling,
+                    this.tspNodes );  
 
             assert ant != null; 
             int attempts = 0;
@@ -590,44 +503,34 @@ public class Controller
                 ant.generateSolution( );
                 colony.add( ant.getPath( ) );
             }
-            else // we are handling constraints
+            else // we are handling constraints, so try repeatedly until we find a valid path
             {
-                // 28 May 2012 - experiment into constraint handling
-                // see if production of only valid solutions
-                // - is possible
-                // - and if so, how many attempts?
+                assert( AlgorithmParameters.constraintHandling == true );
                 
-                ant.generateSolution( );
+                ant.generateSolution( ); 
                 
-                // while( ant.isValidPath( ) == false && attempts < MAXIMUM_ATTEMPTS ) 13 January 2016
                 while( ant.isValidPath( ) == false )
                 {
-                    ant.generateSolution( );
+                    ant.generateSolution( ); 
                     attempts++;
                 }
-//                if( attempts == MAXIMUM_ATTEMPTS )
-//                {
-//                    assert false : "maximum attempts reached";
-//                }
                 
+                assert ant.isValidPath( ) == true; 
+                                
                 if( attempts > 0 )
                 {
                     retries++;
                 }
-                colony.add( ant.getPath( ) );
-//                System.out.println( "number of attempts is: " + attempts );
                 
+                colony.add( ant.getPath( ) );
             }
-           
-            attemptTotal += attempts;
             
-            // and then each ant generates partial solutions
-            // from the immediately previously constructed solution path
-//            ant.generatePartialSolutions( );
+            attemptTotal += attempts;
         }
         
         numberOfRetries[ iterationCounter ] = retries;
-        if( retries > 0 )
+        
+        if( retries > 0 ) // prevent divide by zero
         {    
             averageAttempts[ iterationCounter ] = (double) attemptTotal / (double) retries;
         }
@@ -640,24 +543,18 @@ public class Controller
      * In this ACO search, the daemon actions transform all
      * solution paths into software designs in order to
      * calculate fitness (and later, visualization for interaction). 
-     * @param multi-objective weights
      */
     private void daemonActions( ) 
     {
-        // get the use table and use matrix in readiness
-        SortedMap< String, List< CLSDatum > > useTable = problemController.getUseTable( );
-        assert useTable != null;
-        
         double runningTotalCBO = 0.0;
         this.iterationAverageCBO = 0.0;
         
         // reset metrics to arbitrary values...
         this.bestSoFarCBO = 1.0;
         this.bestSoFarEleganceNAC = 100.0; // arbitrary value
-//        this.bestSoFarEleganceATMR = 100.0; // arbitrary value
-//        this.bestSoFarEleganceModularity = 0.0;
         this.bestSoFarCombined = 100.0; // arbitrary value
-                
+        this.bestSoFarTSPPathLength = 9999999.0; // arbitrary valie
+        
         this.worstSoFarCBO = 0.0;
         this.worstSoFarNAC = 0.0;
         this.worstSoFarCombined = 0.0;
@@ -669,119 +566,243 @@ public class Controller
         assert colony.size( ) == AlgorithmParameters.NUMBER_OF_ANTS :
             "environment size is: " + colony.size( );
 
-        // for each path in the colony
-        Iterator< Path > it = colony.iterator( ); 
-        int counter = 0;
+        int iterationCounter = 0;
         
-        // get the path, and determine fitness etc.
-        for( Path path : colony )
+        // get each path in colony, determine fitness, find single best and worst etc.
+        for( Path path : this.colony )
         {
 //            path.showRawResults( );
             
-            // 29 November 2015 calculate fitness from the path
-            // calculates CBO, NAC, ATMTR and Combined in one go!
-            DaemonOperators.calculateDesignSolutionPathFitness( path, problemController );
-            
-            // CBO related fitness first
-            double externalCoupling = path.getCBO( );
-            
-            if( AlgorithmParameters.constraintHandling == true )
+            // if it's a TSP problem instance
+            if( Parameters.problemNumber == Parameters.TSP_BERLIN52 ||
+                Parameters.problemNumber == Parameters.TSP_ST70 ||
+                Parameters.problemNumber == Parameters.TSP_RAT99 ||
+                Parameters.problemNumber == Parameters.TSP_RAT195 )    
             {
-                if( externalCoupling == 0.0 )
+                // 18 September 2018 calculate the solution path cost in TSP
+                DaemonOperators.calculateTSPSolutionPathLength( path, problemController );
+            }
+            else // must be a software design problem instance
+            {
+                // 29 November 2015 calculate fitness from the software design path
+                DaemonOperators.calculateDesignSolutionPathFitness( path, problemController );
+
+                // keep running total for iteration average
+                runningTotalCBO += path.getCBO( ); 
+
+                if( path.isValid( ) == false )
                 {
-                    System.out.println( "impossible CBO for path: " + counter );
+                    invalidCounter++;
                 }
             }
-            // keep running total for iteration average
-            runningTotalCBO += externalCoupling; 
             
-            // check for best so far CBO
-            if( externalCoupling < this.bestSoFarCBO )
-            {
-                this.bestSoFarCBO = externalCoupling;
-                this.bestCBOIndex = counter;
-            }
+            calculateSingleBestAndWorst( path, iterationCounter );
             
-            // check for worst so far CBO 07 Jan 2016
-            if( externalCoupling > this.worstSoFarCBO )
-            {
-                this.worstSoFarCBO = externalCoupling;
-                this.worstCBOIndex = counter;
-            }
+            iterationCounter++;
             
-            // check for best so far NAC
-            double eleganceNAC = path.getEleganceNAC( );
-            if( eleganceNAC < bestSoFarEleganceNAC )
-            {
-                this.bestSoFarEleganceNAC = eleganceNAC;
-                this.bestNACIndex = counter;
-            }
-            
-            // check for worst so far NAC 1 Feb 2016
-            if( eleganceNAC > this.worstSoFarNAC )
-            {
-                this.worstSoFarNAC = eleganceNAC;
-                this.worstCBOIndex = counter;
-            }
-            
-            
-            // 29 November 2015 Combined fitness secondly...
-            double combined = path.getCombined( );
-            if( combined < bestSoFarCombined )
-            {
-                this.bestSoFarCombined = combined;
-                this.bestCombinedIndex = counter;
-            }
-            
-            // check for worst so far CBO 07 Jan 2016
-            if( combined > worstSoFarCombined )
-            {
-                this.worstSoFarCBO = combined;
-                this.worstCombinedIndex = counter;
-            }
-            counter++;
-
-            if( path.isValid( ) == false )
-            {
-                invalidCounter++;
-            }
         }   // end for each solution path in the colony
 
         // 2 Feb 2016
         if( invalidCounter > this.maxInvalids )
         {
-            this.maxInvalids = counter;
+            this.maxInvalids = iterationCounter;
         }
         
         
-        assert runningTotalCBO >= 0.0;
-        
-        if( runningTotalCBO == 0.0 )
+        if( Parameters.problemNumber == Parameters.CBS || 
+            Parameters.problemNumber == Parameters.GDP ||     
+            Parameters.problemNumber == Parameters.RANDOMISED ||     
+            Parameters.problemNumber == Parameters.SC )
         {
-             this.iterationAverageCBO = 0.0;
+            assert runningTotalCBO >= 0.0;
+
+            if( runningTotalCBO == 0.0 )
+            {
+                 this.iterationAverageCBO = 0.0;
+            }
+            else
+            {
+                this.iterationAverageCBO = 
+                    runningTotalCBO / (double) this.colony.size( );
+            }
+
+            // for MMAS experiment, 6 September 2012
+            this.bestPathInColonyCBO = this.colony.get( this.bestCBOIndex );
+
+            // for multi-objective MMAS, 17 September 2012
+            this.bestPathInColonyNAC = this.colony.get( this.bestNACIndex );
+            this.bestPathInColonyATMR = this.colony.get( this.bestATMRIndex );
+
+            // 29 November 2015
+            this.bestPathInColonyCombined = this.colony.get( this.bestCombinedIndex );
+
+            // 7 January 2016
+            this.worstPathInColonyCBO = this.colony.get( this.worstCBOIndex );
+            this.worstPathInColonyNAC = this.colony.get( this.worstNACIndex );
         }
-        else
-        {
-            this.iterationAverageCBO = 
-                runningTotalCBO / (double) this.colony.size( );
-        }
         
-        // for MMAS experiment, 6 September 2012
-        this.bestPathInColonyCBO = this.colony.get( this.bestCBOIndex );
         
-        // for multi-objective MMAS, 17 September 2012
-        this.bestPathInColonyNAC = this.colony.get( this.bestNACIndex );
-        this.bestPathInColonyATMR = this.colony.get( this.bestATMRIndex );
-   
-        // 29 November 2015
-        this.bestPathInColonyCombined = this.colony.get( this.bestCombinedIndex );
-        
-        // 7 January 2016
-        this.worstPathInColonyCBO = this.colony.get( this.worstCBOIndex );
-        this.worstPathInColonyNAC = this.colony.get( this.worstNACIndex );
-        this.worstPathInColonyCombined = this.colony.get( this.worstCombinedIndex );
-        
+        // 26 June 2018, refactored 17 September 2018
+        calculateBestAndWorst( ); // for second and third best and worst
     }
+    
+    // 5 July 2017
+    // Refactor calculation of single best and worst solution paths 
+    // in colony into a method.
+    private void calculateSingleBestAndWorst( final Path path, final int iterationCounter )
+    {
+        assert path != null;
+        assert iterationCounter >= 0;
+        assert iterationCounter < AlgorithmParameters.NUMBER_OF_ANTS;
+        
+        if( Parameters.problemNumber == Parameters.CBS || 
+            Parameters.problemNumber == Parameters.GDP ||
+            Parameters.problemNumber == Parameters.RANDOMISED ||
+            Parameters.problemNumber == Parameters.SC )
+        {
+            double externalCoupling = path.getCBO( );
+            assert externalCoupling >= 0.0 : "impossible CBO for path: " + iterationCounter;
+
+            // check for best so far CBO
+            if( externalCoupling < this.bestSoFarCBO )
+            {
+                this.bestSoFarCBO = externalCoupling;
+                this.bestCBOIndex = iterationCounter;
+            }
+
+            // check for worst so far CBO 07 Jan 2016
+            if( externalCoupling > this.worstSoFarCBO )
+            {
+                this.worstSoFarCBO = externalCoupling;
+                this.worstCBOIndex = iterationCounter;
+            }
+
+            // check for best so far NAC
+            double eleganceNAC = path.getEleganceNAC( );
+            if( eleganceNAC < bestSoFarEleganceNAC )
+            {
+                this.bestSoFarEleganceNAC = eleganceNAC;
+                this.bestNACIndex = iterationCounter;
+            }
+
+            // check for worst so far NAC 1 Feb 2016
+            if( eleganceNAC > this.worstSoFarNAC )
+            {
+                this.worstSoFarNAC = eleganceNAC;
+                this.worstNACIndex = iterationCounter;
+            }
+
+            // 29 November 2015 Combined fitness secondly...
+            double combined = path.getCombined( );
+            if( combined < bestSoFarCombined )
+            {
+                this.bestSoFarCombined = combined;
+                this.bestCombinedIndex = iterationCounter;
+            }
+
+            // check for worst so far Combined 07 Jan 2016
+            if( combined > worstSoFarCombined )
+            {
+                this.worstSoFarCombined = combined;
+                this.worstCombinedIndex = iterationCounter;
+            }
+        }
+        else // must be TSP problem instance
+        {
+            // 18 September 2018 for TSP
+            final double pathLength = path.getTSPPathLength( );
+            if( pathLength < this.bestSoFarTSPPathLength )
+            {
+                this.bestSoFarTSPPathLength = pathLength;
+                this.bestTSPIndex = iterationCounter;
+            }
+        }
+    }
+    
+    /**
+     * Calculate best and worst paths in the colony 
+     * by sorting the paths in the colony first.
+     * Refactored 26 June 2018, 17 September 2018
+     */
+    private void calculateBestAndWorst( )
+    {
+        assert this.colony != null;
+        
+        // if the problem instance is a TSP...
+        
+        if( Parameters.problemNumber == Parameters.TSP_BERLIN52 ||
+            Parameters.problemNumber == Parameters.TSP_ST70 || 
+            Parameters.problemNumber == Parameters.TSP_RAT99 ||
+            Parameters.problemNumber == Parameters.TSP_RAT195 )     
+        {
+            double bestTSPPathLength = 0.0;
+            double secondBestTSPPathLength = 0.0;
+            double thirdBestTSPPathLength = 0.0;
+            
+            this.colony.sort( new PathComparatorForTSP( ) );
+            
+            this.bestTSPPathInColony = this.colony.get( 0 );
+            bestTSPPathLength = this.bestTSPPathInColony.getTSPPathLength( );
+            this.secondBestTSPPathInColony = this.colony.get( 1 );
+            secondBestTSPPathLength = this.secondBestTSPPathInColony.getTSPPathLength( );
+            this.thirdBestTSPPathInColony = this.colony.get( 2 );
+            thirdBestTSPPathLength = this.thirdBestTSPPathInColony.getTSPPathLength( );
+            
+            assert bestTSPPathLength  <= secondBestTSPPathLength;
+            assert secondBestTSPPathLength <= thirdBestTSPPathLength;
+            
+            double worstTSPPathLength = 0.0;
+            double secondWorstTSPPathLength = 0.0;
+            double thirdWorstTSPPathLength = 0.0;
+            
+            this.worstTSPPathInColony = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 1 );
+            worstTSPPathLength = this.worstTSPPathInColony.getTSPPathLength( );
+            this.secondWorstTSPPathInColony = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 2 );
+            secondWorstTSPPathLength = this.secondWorstTSPPathInColony.getTSPPathLength( );
+            this.thirdWorstTSPPathInColony = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 3 );
+            thirdWorstTSPPathLength = this.thirdWorstTSPPathInColony.getTSPPathLength( );
+            
+            assert worstTSPPathLength >= secondWorstTSPPathLength;
+            assert secondWorstTSPPathLength >= thirdWorstTSPPathLength;
+        }
+        else // must be a software design problem instance
+        {
+            // fistly sort the colony according to Fcomb
+            this.colony.sort( new PathComparatorForFcombined( ) );   
+        
+            // find the second and third best paths
+            // (best path already calulated previously). 
+            final double bestCombined = this.colony.get( 0 ).getCombined( );
+
+            this.secondBestPathInColonyCombined = this.colony.get( 1 );
+            final double secondBestCombined = this.secondBestPathInColonyCombined.getCombined( );
+            assert bestCombined <= secondBestCombined : 
+                    "error in second best!" + 
+                    " best is: " + bestCombined +
+                    " and second best is: " + secondBestCombined;
+
+            this.thirdBestPathInColonyCombined = this.colony.get( 2 );
+            final double thirdBestCombined = this.thirdBestPathInColonyCombined.getCombined( );
+            assert secondBestCombined <= thirdBestCombined : 
+                    "error in third best!" + 
+                    " second best is: " + secondBestCombined + 
+                    " and third best is: " + thirdBestCombined;
+
+            this.worstPathInColonyCombined = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 1 );
+
+            final double sortedColonyWorstCombinedValue = this.worstPathInColonyCombined.getCombined( );
+            // System.out.println( "  update worst is: " + this.worstPathInColonyCombined.toString( )+ " " + sortedColonyWorstCombinedValue );
+
+            // 25 July 2017
+            this.secondWorstPathInColonyCombined = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 2 );
+            final double sortedColonySecondWorstCombined = this.secondWorstPathInColonyCombined.getCombined( );
+            assert sortedColonySecondWorstCombined <= sortedColonyWorstCombinedValue : "error in second worst!";
+
+            this.thirdWorstPathInColonyCombined = this.colony.get( AlgorithmParameters.NUMBER_OF_ANTS - 3 );
+            final double sortedColonyThirdWorstCombined = this.thirdWorstPathInColonyCombined.getCombined( );
+            assert sortedColonyThirdWorstCombined <= sortedColonySecondWorstCombined : "error in third worst!";
+        }
+    }    
     
    /**
      * adjust the pheromone levels:
@@ -789,10 +810,10 @@ public class Controller
      * 2) update Trail levels based on ant construction
      * @param weights for multi-objective pheromone update
      */ 
-    private void pheromoneUpdate( Weights weights, int iteration )
+    private void pheromoneUpdate( int iteration, BestPathsMatrix bpm )
     { 
-        assert weights != null;
         assert iteration >= 0;
+        assert bpm != null; 
         
         PheromoneOperators.evaporate( pheromoneTable );
         
@@ -801,59 +822,38 @@ public class Controller
         PheromoneOperators.update(
             this.pheromoneTable, 
             this.colony, 
-            weights, 
             this.bestPathInColonyCBO,
             this.bestPathInColonyNAC,
             this.bestPathInColonyATMR,
             this.bestPathInColonyCombined,
+            this.secondBestPathInColonyCombined,
+            this.thirdBestPathInColonyCombined,
             this.worstPathInColonyCBO,
             this.worstPathInColonyNAC,
             this.worstPathInColonyCombined,
-            iteration );
+            this.secondWorstPathInColonyCombined,
+            this.thirdWorstPathInColonyCombined,
+            iteration,
+            bpm,
+            this.bestTSPPathInColony,
+            this.secondBestTSPPathInColony,
+            this.thirdBestTSPPathInColony,
+            this.worstTSPPathInColony,
+            this.secondWorstTSPPathInColony,
+            this.thirdWorstTSPPathInColony );
         
 //        pheromoneTable.showRawResults( );
     }
 
-    
     /**
-     * Does the designer interact at this iteration?
-     * Apply the notion of the fitness proportionate
-     * interactive interval, based on best CBO
-     * @return true if interaction is appropriate, false otherwise
+     * elitist replacement of path(s) into the colony
      */
-    private boolean checkForInteraction() 
-    {
-        boolean result = false;
-        final double squareValue = this.bestSoFarCBO * this.bestSoFarCBO;
-        final double value = 
-            squareValue * AlgorithmParameters.INTERACTIVE_INTERVAL_CONSTANT;
-        long rounded = Math.round(value);
-        
-        // ensure the rounded number is at least 1
-        if (rounded < 1) 
-        {
-            rounded = 1;
-        }
-        
-        if (interval < rounded) 
-        {
-            interval++;
-            System.out.println( "interval is: " + interval );
-        } 
-        else 
-        {
-            interval = 0;
-            result = true;
-        }
-        return result;
-    }
-    
-    /**
-     * elitist insert of path(s) into the colony
-     */
-    private void elitistInsert( )
+    private void elitistReplace( )
     {
         final int size = colony.size( );
+        
+        // for debug
+        // final int eliteSize = this.eliteArchive.size( );
         
         while( this.eliteArchive.empty( ) == false ) // handle first iteration where eilte archive is empty
         {
@@ -866,8 +866,7 @@ public class Controller
     }
     
     /**
-     * update the elite archive to hold to fittest path
-     * in the colony 
+     * update the elite archive to hold to fittest path(s)in the colony 
      */
     private void updateEliteArchive(  )
     {
@@ -928,41 +927,6 @@ public class Controller
 //        }
         
         assert this.eliteArchive.size( ) <= 3;
-        
-        // 10 April 2013
-        // reset the domination count for the next iteration
-        for( Path p : this.eliteArchive )
-        {
-            p.resetDominationCount( );
-        }
-        
-        // 19 September 2012 - non-dom approach doesn't work
-//        Path p = ParetoOperators.selectPathWithLeastWeightedDominationCount(
-//            this.colony, weights );
-//        this.eliteArchive.add( p );
-//        assert this.eliteArchive.empty( ) == false;
-        
-        // 20 Sept 2012 - this doesn't work either
-//        Path p = null;
-//        List< Path > nonDoms = ParetoOperators.getNomDoms( colony );
-//
-//        if( nonDoms.isEmpty( ) )    // more likely? 
-//        {        
-//            p = ParetoOperators.selectPathWithLeastWeightedDominationCount( 
-//            colony, weights );
-//        }
-//        else    // less likely??
-//        {
-//            final int numberOfNonDoms = nonDoms.size( );
-//            assert numberOfNonDoms > 0;
-//            final int randomSelection = Utility.getRandomInRange( 1, numberOfNonDoms );
-//            assert randomSelection <= numberOfNonDoms;
-//            p = nonDoms.get( randomSelection - 1 );
-//        }
-//        
-//        this.eliteArchive.add( p );
-//        assert this.eliteArchive.empty( ) == false;
-        
     }
     
     
@@ -975,274 +939,9 @@ public class Controller
         assert colony.size( ) > 0; // assert that paths exist
         colony.clear( );
     }
-
-    
-    /**
-     * perform interaction
-     * @param the three weights
-     * @param list of classes user has elected to "freeze"
-     * @param iteration
-     * @param interaction counter 
-     * @param information about this iteration
-     * @param archive 
-     * @return user action from Dialog
-     */
-    private int performInteraction( 
-        Weights weights, 
-        List< CLSClass > freezeList,
-        int iteration,
-        int interactionCounter,
-        IterationInformation information,
-        List< EleganceDesign > archive )
-        // 6 Nov 2015 ServletController servletController)
-    {
-        assert weights != null;
-        assert freezeList != null;
-        assert information != null;
-        assert archive != null;
-        
-        // select a solution path for visualisation
-        Path path = null;
-//        List< Path > nonDoms = ParetoOperators.getNomDoms( this.colony );
-//
-//        if( nonDoms.isEmpty( ) == false )    // not so likely? 
-//        {        
-//            final int numberOfNonDoms = nonDoms.size( );
-//            assert numberOfNonDoms > 0;
-//            final int randomSelection = Utility.getRandomInRange( 1, numberOfNonDoms );
-//            assert randomSelection <= numberOfNonDoms;
-//            path = nonDoms.get( randomSelection - 1 );
-//        }
-//        else    // more likely??
-//        {
-//            path = ParetoOperators.selectPathWithLeastWeightedDominationCount( 
-//                colony, weights );
-//            
-//            final int randomSelection = Utility.getRandomInRange( 1, 4 );
-//            
-//            switch( randomSelection )
-//            {
-//                case 1: { path = this.colony.get( this.bestCBOIndex ); break; } 
-//                
-//                case 2: { path = this.colony.get( this.bestNACIndex ); break; }
-//                
-//                case 3: { path = this.colony.get( this.bestATMRIndex ); break; }
-//                
-//                case 4: { path = 
-//                            ParetoOperators.selectPathWithLeastWeightedDominationCount( 
-//                                colony, weights ); 
-//                          break; }
-//                
-//                default: { assert false : "impossible random selection!"; }
-//            }
-//        }
-        
-//        final int numberOfFitnessFunctionsToView = 2;
-//        final int selection = ffCounter % numberOfFitnessFunctionsToView;
-//        ffCounter++;
-//        
-//        switch( selection )
-//        {
-//            case 0: { path = this.colony.get( this.bestCBOIndex ); break; } 
-//
-//            case 1: { path = this.colony.get( this.bestNACIndex ); break; }
-//
-//            case 2: { path = this.colony.get( this.bestATMRIndex ); break; }
-//
-//            default: { assert false : "impossible selection!"; }
-//        }
-//        
-        boolean done = false;
-        int domCount = 0;
-
-        while( ! done )
-        {
-            List< Path > list = ParetoOperators.getPathsWithDomCount( colony, domCount );
-            if( list.isEmpty( ) )
-            {
-                domCount++;
-            }
-            else
-            {
-                int numberOfPaths = list.size( );
-                assert numberOfPaths > 0;
-                final int randomSelection = Utility.getRandomInRange( 1, numberOfPaths );
-                assert randomSelection <= numberOfPaths;
-                path = list.get( randomSelection - 1 );
-                done = true;
-            }
-        }
-        assert path != null;
-        
-        /* 6 Nov 2015
-        servletController.setPath(path);
-        servletController.setDesignName("Fred");
-        servletController.setUseTable(this.problemController.getUseTable());
-        servletController.setFreezeList(freezeList);
-        servletController.setIteration(iteration);
-        servletController.setInteractionCounter(interactionCounter);
-        servletController.setInformation(information);
-        servletController.setArchive(archive);
-        */
-       
-        
-//        VisualiseEvaluateDialog ved = new VisualiseEvaluateDialog(
-//                path,
-//                "Fred",
-//                this.problemController.getUseTable( ),
-//                freezeList, 
-//                iteration, 
-//                interactionCounter,
-//                information,
-//                archive );
-        
-//        ved.setVisible( true );
-
-//        int userAction = ved.getUserAction( );
-        
-//        int designerEvaluation = ved.getDesignerEvaluation( );
-//        information.designerEvaluation = designerEvaluation;
-        
-        int userAction = 1;
-        
-        if( userAction == JOptionPane.OK_OPTION )   // user has clicked "next"
-        {
-            Coefficients coefficients = new Coefficients( );
-
-            doRegression( path, coefficients, information );
-            
-            calculateWeights( coefficients, weights );
-        }
-        
-        // 9 April 2013 - for SSBSE paper
-        // reset the CBO weight to 1.0
-        weights.weightCBO = 1.0;
-        weights.weightATMR = 0.0;
-        weights.weightNAC = 0.0;
-        
-        return userAction;
-    }
-    
-    
-    /**
-     * do the multiple linear regression to update the coefficients
-     * using the OpenForecast OpenSource code wrapped in RegressionAgent
-     * @param path
-     * @param designer evaluation
-     * @param coefficients
-     * @param iteration information
-     */
-    private void doRegression( 
-        Path path, 
-        Coefficients coefficients,
-        IterationInformation information )
-    {
-        assert path != null;
-        assert information != null;
-        assert information.designerEvaluation >= 0;
-        assert information.designerEvaluation <= 100;
-        assert coefficients != null;
-        
-        // construct an observation with the dependent variable
-        Observation observation = new Observation( information.designerEvaluation ); 
-
-        // now set up the independent variables i.e. CBO, NAC and ATMR
-        observation.setIndependentValue( 
-            RegressionAgent.independentVariables[ 0 ], path.getCBO( ) );
-        observation.setIndependentValue( 
-            RegressionAgent.independentVariables[ 1 ], path.getEleganceNAC( ) );
-        observation.setIndependentValue( 
-            RegressionAgent.independentVariables[ 2 ], path.getEleganceATMR( ) );
-
-        RegressionAgent.addObservation( observation );
-        RegressionAgent.init( );
-
-        System.out.println( "intercept is: " + RegressionAgent.getIntercept( ) );
-        coefficients.cCBO = RegressionAgent.getCBOCoefficient( );
-        System.out.println( "cCBO is: " + coefficients.cCBO );
-        coefficients.cNAC = RegressionAgent.getNACCoefficient( );
-        System.out.println( "cNAC is: " + coefficients.cNAC );
-        coefficients.cATMR = RegressionAgent.getATMRCoefficient( );
-        System.out.println( "cATMR is: " + coefficients.cATMR );
-        
-        System.out.println( "Mean absolute percentage error is: " + RegressionAgent.getMAPE( ) );
-        information.mape = RegressionAgent.getMAPE( );
-        
-        System.out.println( "Mean absolute deviation is: " + RegressionAgent.getMAD( ) );
-        information.mad = RegressionAgent.getMAD( );
-    }
-         
-    /**
-     * calculate the MO weights based on the coefficients
-     * @param coefficients
-     * @param weights 
-     */
-    private void calculateWeights( Coefficients coefficients, Weights weights )
-    {
-        assert coefficients != null;
-        assert weights != null;
-        
-        if( coefficients.cCBO == 0.0  ||
-            coefficients.cNAC == 0.0  ||
-            coefficients.cATMR == 0.0  )
-        {
-            // this shouldn't happen(!) so reset weights to initial values
-            System.err.println( "weights un-initialised" );
-            weights.weightCBO = AlgorithmParameters.INITIAL_wCBO;
-            weights.weightNAC = AlgorithmParameters.INITIAL_wNAC;
-            weights.weightATMR = AlgorithmParameters.INITIAL_wATMR;
-        }
-        else if( Double.isNaN( coefficients.cCBO ) ||
-                 Double.isNaN( coefficients.cNAC ) ||
-                 Double.isNaN( coefficients.cATMR ) )
-        {
-            // this could happen for example when the
-            // data set contains only one observation
-            // so do nothing...
-        }
-        else
-        {
-            double total = Math.abs( coefficients.cCBO ) +
-                           Math.abs( coefficients.cNAC ) + 
-                           Math.abs( coefficients.cATMR );
-            
-            weights.weightCBO = Math.abs( coefficients.cCBO ) / total ;
-            weights.weightNAC = Math.abs( coefficients.cNAC ) / total;
-            weights.weightATMR = Math.abs( coefficients.cATMR ) / total;
-            
-            weights.checkSum( );
-        } 
-        
-         System.out.println( "weight for CBO is: " + df.format( weights.weightCBO ) );
-         System.out.println( "weight for NAC is: " + df.format( weights.weightNAC ) );
-         System.out.println( "weight for ATMR is: " + df.format( weights.weightATMR ) );
-    }
-    
-    /**
-     * 31 August 2012
-     * in batch mode, write the final results to file
-     */
-    public void writeBatchResultsToFile( )
-    {
-        batchResults.calculateFinalResults( );
-        
-//        if( AlgorithmParameters.heuristics == false )
-//        {
-//            batchResults.writeFinalResults(
-//                Parameters.outputFilePath, 
-//                averageRunTimes, 
-//                AlgorithmParameters.constraintHandling );
-//        }
-//        else    // must be heuristic ant search
-//        {
-//            batchResults.writeFinalHeuristicResults( Parameters.outputFilePath );
-//        }
-        
-        // 23 July 2013
-        batchResults.writeFinalHeuristicResults( Parameters.outputFilePath );
-    }
       
-    /*
+    /**
+     *  Calculate final results and write them to appropriate output file
      *  17 Nov 2015 
      */
     public void writeResultstoFile( )
@@ -1251,6 +950,193 @@ public class Controller
         batchResults.writeResults( );
     }
     
+    // 5 September 2018 refactor for ACO iterations
+    private void investigateInterference( final int runNumber, final int iteration )
+    {
+        assert runNumber >= 0;
+        assert iteration >= 0;
+        
+        BestPathsMatrix bpm = new BestPathsMatrix( pheromoneTable.size( ) );
+        switch( AlgorithmParameters.pheromoneStrength )
+        {
+            case AlgorithmParameters.MMAS_PHEROMONE_TRIPLE:
+                bpm.recordPath( this.thirdBestPathInColonyCombined );
+            case AlgorithmParameters.MMAS_PHEROMONE_DOUBLE:
+                bpm.recordPath( this.secondBestPathInColonyCombined );
+            case AlgorithmParameters.MMAS_PHEROMONE_SINGLE:
+                bpm.recordPath( this.bestPathInColonyCombined );
+                break;
+            default:
+                assert false : "impossible pheromone strength!";
+        }
+//        bpm.show( );
+        
+        WorstPathsMatrix wpm = new WorstPathsMatrix( pheromoneTable.size( ) );
+        if( AlgorithmParameters.MMAS_ANTIPHEROMONE == true )
+            //    && AlgorithmParameters.antiPheromonePhasePercentage > 0 )
+        {
+            switch( AlgorithmParameters.antipheromoneStrength )
+            {
+                case AlgorithmParameters.ANTIPHEROMONE_STRENGTH_TRIPLE:
+                    wpm.recordPath( this.thirdWorstPathInColonyCombined );
+                case AlgorithmParameters.ANTIPHEROMONE_STRENGTH_DOUBLE:
+                    wpm.recordPath( this.secondWorstPathInColonyCombined );
+                case AlgorithmParameters.ANTIPHEROMONE_STRENGTH_SINGLE:
+                    wpm.recordPath( this.worstPathInColonyCombined );
+                    break;
+                default:
+                    assert false : "impossible pheromone strength!";
+            }
+        }
+//        wpm.show( );
+        
+        PathInterferenceMatrix pim = new PathInterferenceMatrix( pheromoneTable.size( ) );
+        pim.registerBestPathMatrix( bpm );
+        pim.registerWorstPathMatrix( wpm );
+//        pim.showInterferenceMatrix( );
+        
+        double interference = pim.getInterference( ) * 100;
+//        System.out.println( "interference is: " + df.format( interference ) + "%" ); 
+        
+        batchResults.interference[ runNumber ][ iteration ] = interference;
+    }
+    
+    private void calculateSnapshots( final int runNumber, final int iteration )
+    {
+        assert runNumber >= 0;
+        assert iteration >= 0;
+       
+        if( iteration == 50 )
+        {
+            batchResults.bestCombinedValueAt50OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt50( runNumber );
+            batchResults.areaAt50OverRuns[ runNumber ] = this.areaAt50;
+        }
+        else if( iteration == 100 )
+        {
+            batchResults.bestCombinedValueAt100OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt100( runNumber );
+            batchResults.areaAt100OverRuns[ runNumber ] = this.areaAt100;
+        }
+        else if( iteration == 150 )
+        {
+            batchResults.bestCombinedValueAt150OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt150( runNumber );
+            batchResults.areaAt150OverRuns[ runNumber ] = this.areaAt150;
+        }
+        else if( iteration == 200 )
+        {
+            batchResults.bestCombinedValueAt200OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt200( runNumber );
+            batchResults.areaAt200OverRuns[ runNumber ] = this.areaAt200;
+        }
+        else if( iteration == 300 )
+        {
+            batchResults.bestCombinedValueAt300OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt300( runNumber );
+            batchResults.areaAt300OverRuns[ runNumber ] = this.areaAt300;
+        }
+        else if( iteration == 400 )
+        {
+            batchResults.bestCombinedValueAt400OverRuns[ runNumber ] = this.bestSoFarCombined;
+            calculateAreaAt400( runNumber );
+            batchResults.areaAt400OverRuns[ runNumber ] = this.areaAt400;
+        }
+        else
+        {
+            // do nothing!
+        }
+    }
+    
+    
+    private void calculateAreaAt50( final int runNumber )
+    {
+        final int start = 1;
+        final int end = 50;
+        double temp = 0.0;
+        
+        for( int i = start; i <= end; i++ )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ i ];
+        }
+        
+        this.areaAt50 = temp;
+    }
+    
+    private void calculateAreaAt100( final int runNumber )
+    {
+        int iteration = 50;
+        final int areaSize = 50;
+        double temp = 0.0;
+        
+        for( int i = 1; i <= areaSize; i++  )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ iteration ];
+            iteration++;
+        }
+        
+        this.areaAt100 = temp;
+    }
+    
+    private void calculateAreaAt150( final int runNumber )
+    {
+        int iteration = 100;
+        final int areaSize = 50;
+        double temp = 0.0;
+        
+        for( int i = 1; i <= areaSize; i++  )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ iteration ];
+            iteration++;
+        }
+        
+        this.areaAt150 = temp;
+    }
+    
+    private void calculateAreaAt200( final int runNumber )
+    {
+        int iteration = 150;
+        final int areaSize = 50;
+        double temp = 0.0;
+        
+        for( int i = 1; i <= areaSize; i++  )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ iteration ];
+            iteration++;
+        }
+        
+        this.areaAt200 = temp;
+    }
+    
+    private void calculateAreaAt300( final int runNumber )
+    {
+        int iteration = 200;
+        final int areaSize = 100;
+        double temp = 0.0;
+        
+        for( int i = 1; i <= areaSize; i++  )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ iteration ];
+            iteration++;
+        }
+        
+        this.areaAt300 = temp;
+    }
+    
+    private void calculateAreaAt400( final int runNumber )
+    {
+        int iteration = 300;
+        final int areaSize = 100;
+        double temp = 0.0;
+        
+        for( int i = 1; i <= areaSize; i++  )
+        {
+            temp += (double) i * batchResults.bestCombinedOverRuns[ runNumber ][ iteration ];
+            iteration++;
+        }
+        
+        this.areaAt400 = temp;
+    }
 }   // end class
 
 //------- end file ----------------------------------------
