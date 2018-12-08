@@ -25,6 +25,7 @@ import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import myUtils.Utility;
 
 
 public class BatchResults 
@@ -39,8 +40,27 @@ public class BatchResults
     
     private static final String HEURISTIC_NAC_OUTPUT_NAME = "HeuristicResults.dat";
     
-    // 17 Nov 1015
+    // 17 Nov 2015
     private static final String BEST_COMBINED_FILE_NAME = "BestCOMBINED.dat";
+    
+    // 28 June 2017
+    private static final String RETRIES_ATTEMPTS_FILE_NAME = "RetriesAttempts.dat";
+    
+    // 29 June 2017
+    private static final String COST_FILE_NAME = "Cost.dat";
+    
+    // 8 August 2018
+    private static final String INTERFERENCE_FILE_NAME = "Interference.dat";
+    
+    // 28 August 2018
+    private static final String SNAPSHOT_FILE_NAME = "Snapshot.dat";
+    
+    // 3 September 2018
+    private static final String INTERFERENCE_ITERATIONS_FOR_SPSS_FILE_NAME = "InterferenceIterationsForSPSS.dat";
+    private static final String INTERFERENCE_ITERATIONS_FOR_GNUPLOT_FILE_NAME = "InterferenceIterationsForGnuPlot.dat";
+    
+    // 18 Septembe 2018
+    private static final String BEST_TSP_FILE_NAME = "BestTSP.dat";
     
     /** number of iterations of ant colony */
     private final int numberOfIterations;
@@ -126,7 +146,7 @@ public class BatchResults
 
     
     //Jim Smith added 22-2-12
-    //1D arrays to hold best fitness fpund for each run, 
+    //1D arrays to hold best fitness found for each run, 
     //and when it was found
     private double[ ] bestCBO; 
     private int [ ] whenCBOfound;
@@ -167,6 +187,47 @@ public class BatchResults
     private double[ ] finalBestEleganceATMRSD;
     private double[ ] finalBestEleganceModularity;
     private double[ ] finalBestEleganceModularitySD;
+    
+    
+    // 28 June 2017 for adaptive antipheromone
+    public int[ ][ ] retriesOverRuns;
+    public double[ ][ ] averageAttemptsOverRuns; 
+    
+    private double[ ] averageRetries;
+    private double[ ] averageOfAverageAttempts;
+    
+    private double retriesStdDev[ ];
+    private double attemptsStdDev[ ];
+   
+    // 29 June 2017 for adaptive antipheromone
+    private double bestFcomb[ ];
+    private double bestFcombStdDev[ ];
+    
+    // 8 August 2018 for interference investigations
+    public double interference[ ][ ]; 
+    
+    // 23 August 2018 
+    public double[ ] bestCombinedValueAt50OverRuns;
+    public double[ ] bestCombinedValueAt100OverRuns;
+    public double[ ] bestCombinedValueAt150OverRuns;
+    public double[ ] bestCombinedValueAt200OverRuns;
+    public double[ ] bestCombinedValueAt300OverRuns;
+    public double[ ] bestCombinedValueAt400OverRuns;
+    
+    public double[ ] areaAt50OverRuns;
+    public double[ ] areaAt100OverRuns;
+    public double[ ] areaAt150OverRuns;
+    public double[ ] areaAt200OverRuns;
+    public double[ ] areaAt300OverRuns;
+    public double[ ] areaAt400OverRuns;
+    
+    // 3 Septebmber 2018
+    public double[ ] averageInterference;
+    public double[ ] averageInterferenceStdDev;
+    
+    // 18 September 2018
+    public double[ ] bestTSPLength;
+    public int[ ] whenBestTSPLengthFound;
     
     /**
      * constructor
@@ -303,6 +364,101 @@ public class BatchResults
         }
         
         df = new DecimalFormat( "0.000" );
+       
+        // 28 June 2017 for adaptive antipheromone
+        retriesOverRuns = new int[ numberOfRuns ][ numberOfIterations ];
+        averageAttemptsOverRuns = new double[ numberOfRuns ][ numberOfIterations ];
+        
+        averageRetries = new double[ numberOfIterations ];
+        averageOfAverageAttempts = new double[ numberOfIterations];
+        
+        retriesStdDev = new double[ numberOfIterations ];
+        attemptsStdDev = new double[ numberOfIterations ];
+        
+        for( int l = 0; l < numberOfRuns; l++ )
+        {
+            for( int m = 0; m < numberOfIterations; m++ )
+            {
+                retriesOverRuns[ l ][ m ] = 0;
+                averageAttemptsOverRuns[ l ][ m ] = 0.0;
+            }
+            
+            averageRetries[ l ] = 0.0;
+            averageOfAverageAttempts[ l ] = 0.0;
+        }
+    
+        for( int m = 0; m < numberOfIterations; m++ )
+        {
+            retriesStdDev[ m ] = 0.0;
+            attemptsStdDev[ m ] = 0.0;
+        }
+   
+        // 29 June 2017 for adaptive antipheromone
+        bestFcomb = new double[ numberOfIterations ];
+        bestFcombStdDev= new double[ numberOfIterations ];
+        for( int n = 0; n < numberOfIterations; n++ )
+        {
+            bestFcomb[ n ] = 0.0;
+            bestFcombStdDev[ n ] = 0.0;
+        }
+        
+        // 8 August 2018
+        interference = new double[ numberOfRuns ][ numberOfIterations];
+        for( int m = 0; m < numberOfRuns; m++ )
+        {
+            for( int n = 0; n < numberOfIterations; n++ )
+            {
+                interference[ m ][ n ] = 0.0;
+            }
+        }
+        
+        // 28 August 2018
+        bestCombinedValueAt50OverRuns = new double[ numberOfRuns ];
+        bestCombinedValueAt100OverRuns = new double[ numberOfRuns ];
+        bestCombinedValueAt150OverRuns = new double[ numberOfRuns ];
+        bestCombinedValueAt200OverRuns = new double[ numberOfRuns ];
+        bestCombinedValueAt300OverRuns = new double[ numberOfRuns ];
+        bestCombinedValueAt400OverRuns = new double[ numberOfRuns ];
+        areaAt50OverRuns = new double[ numberOfRuns ];
+        areaAt100OverRuns = new double[ numberOfRuns ];
+        areaAt150OverRuns = new double[ numberOfRuns ];
+        areaAt200OverRuns = new double[ numberOfRuns ];
+        areaAt300OverRuns = new double[ numberOfRuns ];
+        areaAt400OverRuns = new double[ numberOfRuns ];
+        
+        for( int x = 0; x < numberOfRuns; x++ )
+        {
+            bestCombinedValueAt50OverRuns[ x ] = 0.0;
+            bestCombinedValueAt100OverRuns[ x ] = 0.0;
+            bestCombinedValueAt200OverRuns[ x ] = 0.0;
+            bestCombinedValueAt300OverRuns[ x ] = 0.0;
+            bestCombinedValueAt400OverRuns[ x ] = 0.0;
+            areaAt50OverRuns[ x ] = 0.0;
+            areaAt100OverRuns[ x ] = 0.0;
+            areaAt150OverRuns[ x ] = 0.0;
+            areaAt200OverRuns[ x ] = 0.0;
+            areaAt300OverRuns[ x ] = 0.0;
+            areaAt400OverRuns[ x ] = 0.0;
+        }
+        
+        // 3 September 2018
+        averageInterference = new double[ this.numberOfIterations ];
+        averageInterferenceStdDev = new double[ this.numberOfIterations ];
+        
+        for( int y = 0; y < this.numberOfIterations; y++ )
+        {
+            averageInterference[ y ] = 0;
+            averageInterferenceStdDev[ y ] = 0;
+        }
+        
+        // 18 September 2018 for TSP
+        bestTSPLength = new double[ numberOfIterations ];
+        whenBestTSPLengthFound = new int[ numberOfIterations ];
+        for( int z = 0; z < numberOfIterations; z++ )
+        {
+            bestFcomb[ z ] = 0.0;
+            whenBestTSPLengthFound[ z ] = 0;
+        }
     }
     
     /**
@@ -354,14 +510,8 @@ public class BatchResults
      */
     public void calculateFinalResults( )
     {
-        // standard deviation of best designs
-        // can only be done at the trial level
+        // best results for each run
         
-        // 30 Nov 2015 comment out
-//        calculateFinalBestDesignCoupling( );
-//        calculateFinalBestClassCohesion( );
-        
-        //best results for each run
         for( int run = 0; run < numberOfRuns; run++ )
         {
             this.bestCBO[ run ] = 1.0; 
@@ -372,15 +522,9 @@ public class BatchResults
             
             this.bestCombined[ run ] = 1.0;
             this.whenCombinedFound[ run ] = 0;
-            
-            // this.bestATMR[ run ] = 100.0;
-            // this.whenATMRFound[ run ] = 0;
-            // this.bestEM[ run ] = 100.0; 30 November 2015
-            
+                  
             for( int iter = 0; iter < numberOfIterations; iter++ )
             {
-                // 30 November 2015  - report fCBO as a cost (minimisation) 
-                // double tempCBO = 100.0 - 100.0 * this.bestDesignCouplingOverRuns[ run][ iter ];
                 double tempCBO = this.bestDesignCouplingOverRuns[ run][ iter ];
                 if( tempCBO < this.bestCBO[ run ] )
                 {
@@ -401,377 +545,122 @@ public class BatchResults
                     this.bestCombined[ run ] = tempCombined;
                     this.whenCombinedFound[ run ] = iter;
                 }
-                
-                
-                // 6 December 2015 comment out
-//                double tempATMR = this.bestEleganceATMROverRuns[ run ][ iter ];
-//                if( tempATMR < this.bestATMR[ run ] )
-//                {
-//                    this.bestATMR[ run ] = tempATMR;
-//                    this.whenATMRFound[ run ]  = iter;
-//                }
-//            
-                // comment out 30 November 2015
-//                double tempEM = this.bestEleganceModularityOverRuns[ run ][ iter ];
-//                if( tempEM < this.bestEM[ run ] )
-//                {
-//                    this.bestEM[ run ] = tempEM;
-//                }
-            
             }   // end for each iteration
         
-        }   // end for each run over all trials
+        }   // end for each run
         
-        // 24 April 2012
-        // again, can only be done at the trial level
-        // 30 November 2015 comment out
-        // calculateFinalAverageDesignCoupling( );
-        // calculateFinalBestElegance( );
         
-        // now calculate the average values,
-        // taken as an average of raw data
-//        double runningAverageCoupling = 0.0;
-//        double runningAverageCouplingSD = 0.0;
+        // 28 June 2018 for adaptive antipheromone
+        // calculate the average number of retries and attempts for each run
+        int runningTotalRetries[ ] = new int[ numberOfIterations ];
+        double runningTotalAttempts[ ] = new double[ numberOfIterations ];
         
-//        double runningAverageCohesion = 0.0;
-//        double runningAverageCohesionSD = 0.0;
-//        
-//        for( int i = 0; i < numberOfIterations; i++ )
-//        {
-//            for( int j = 0; j < numberOfRuns; j++ )
-//            {
-//                runningAverageCoupling += averageDesignCouplingOverRuns[ j ][ i ];
-//                runningAverageCouplingSD += averageDesignCouplingOverRunsSD[ j ][ i ];
-//                runningAverageCohesion += averageClassCohesionOverRuns[ j ][ i ];
-//                runningAverageCohesionSD += averageClassCohesionOverRunsSD[ j ][ i ];
-//
-//            }   // end for each trial
-//
-//            // calulate final results
-//            finalAverageDesignCoupling[ i ] =
-//                runningAverageCoupling / (double) AcoController.NUMBER_OF_TRIALS;
-//            finalAverageDesignCouplingSD[ i ] =
-//                runningAverageCouplingSD / (double) AcoController.NUMBER_OF_TRIALS;
-//            
-//            finalAverageClassCohesion[ i ] = 
-//                runningAverageCohesion / (double) numberOfRuns;
-//            finalAverageClassCohesionSD[ i ] = 
-//                runningAverageCohesionSD / (double) numberOfRuns;
-//                    
-//            // reset for next iteration
-//            runningAverageCoupling = 0.0;
-//            runningAverageCouplingSD = 0.0;
-//            runningAverageCohesion = 0.0;
-//            runningAverageCohesionSD = 0.0;
-//            
-//        }   // end for each iteration
-        
-    }
-    
-    /**
-     * calculate the (average) final best design coupling value
-     * for each iteration over a number of trials,
-     * and also calculate the standard deviation at the same time
-     */
-    private void calculateFinalBestDesignCoupling( ) 
-    { 
-        double runningTotals[ ] = 
-            new double[ numberOfIterations ];
-        double averages[ ] =
-            new double[ numberOfIterations ];
-        double[ ] squaredValueSums = 
-            new double[ numberOfIterations ];
-        
-        int i = 0;
-        int j = 0;
-
-        for( i = 0; i < numberOfIterations; i++ )
+        for( int r = 0; r < numberOfRuns; r++ )
         {
-            runningTotals[ i ] = 0.0;
-            averages[ i ] = 0.0;
-            squaredValueSums[ i ] = 0;
-        }
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            for( j = 0; j < numberOfRuns; j++ )
+            for( int iteration = 0; iteration < numberOfIterations; iteration++ )
             {
-                runningTotals[ i ] += this.bestDesignCouplingOverRuns[ j ][ i ];
-                
-            }   // end for each trial
-        
-        }   // end for each iteration
-        
-        
-//        for( i = 0; i < numberOfIterations; i++ )
-//        {
-//            System.out.println( "running total is: " + runningTotals[ i ] );
-//        }
-//    
-        
-        
-        // calculate the average at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            averages[ i ] = runningTotals[ i ] / (double) numberOfRuns;
-            this.finalBestDesignCoupling[ i ] = averages[ i ];
-        }
-    
-        // calculate the standard deviation at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            for( j = 0; j < numberOfRuns; j++ )
-            {
-                assert j < numberOfRuns : "j is: " + j;
-                double temp = this.bestDesignCouplingOverRuns[ j ][ i ] - averages[ i ];
-                double squaredValue = temp * temp;
-                squaredValueSums[ i ] += squaredValue;
+                runningTotalRetries[ iteration ] += this.retriesOverRuns[ r ][ iteration ];
+                runningTotalAttempts[ iteration ] += this.averageAttemptsOverRuns[ r ][ iteration ];
             }
         }
         
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            double temp2 = squaredValueSums[ i ] / (double) numberOfRuns;
-            this.finalBestDesignCouplingSD[ i ] = Math.sqrt(  temp2 );
-        }
+        assert numberOfRuns > 0; // prevent divide by zero error
         
-    //      taken from GA code...
-//        for( int c = 0; c < runs; c++ )
-//        {
-//            for( int d = 0; d < numGen; d++ )
-//            {
-//                double temp = numbers[ c ][ d ] - meanAverage[ d ];
-//                double squaredValue = temp * temp;
-//                squaredValueSum[ d ] += squaredValue;
-//            }
-//        }
-//
-//        double sd[ ] = new double[ numGen ];
-//        for( int e = 0; e < numGen; e++ ) { sd[ e ] = 0.0; }
-//
-//        for( int f = 0; f < numGen; f++ )
-//        {
-//            double temp2 = squaredValueSum[ f ] / numGen;
-//            sd[ f ] = Math.sqrt( temp2 );
-//        }
-    
-    
-    }
-    
-    
-    
-    /**
-     * calculate the (average) final best class cohesion value
-     * for each iteration over a number of trials,
-     * and also calculate the standard deviation at the same time
-     */
-    private void calculateFinalBestClassCohesion( ) 
-    { 
-        double runningTotals[ ] = 
-            new double[ numberOfIterations ];
-        double averages[ ] =
-            new double[ numberOfIterations ];
-        double[ ] squaredValueSums = 
-            new double[ numberOfIterations ];
-        
-        int i = 0;
-        int j = 0;
-
-        for( i = 0; i < numberOfIterations; i++ )
+        for( int i = 0; i < numberOfIterations; i++ )
         {
-            runningTotals[ i ] = 0.0;
-            averages[ i ] = 0.0;
-            squaredValueSums[ i ] = 0;
-        }
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            for( j = 0; j < numberOfRuns; j++ )
-            {
-                runningTotals[ i ] += this.bestClassCohesionOverRuns[ j ][ i ];
-                
-            }   // end for each trial
-        
-        }   // end for each iteration
-    
-        // calculate the average at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            averages[ i ] = runningTotals[ i ] / (double) numberOfRuns;
-            this.finalBestClassCohesion[ i ] = averages[ i ];
+            this.averageRetries[ i ] = (double) runningTotalRetries[ i ] / (double) numberOfRuns;
+            this.averageOfAverageAttempts[ i ] = runningTotalAttempts[ i ] / (double) numberOfRuns;
             
         }
-    
-        // calculate the standard deviation at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
+        
+        // 28 June 2017 for adaptive antipheromone
+        // calculate the standard deviations for retries and attempts
+        int iterationRetries[ ] = new int[ numberOfIterations ];
+        double iterationAttempts[ ] = new double[ numberOfIterations ];
+        
+        // double retriesStdDev[ ] = new double[ numberOfIterations ];
+        // double attemptsStdDev[ ] = new double[ numberOfIterations ];
+        
+        for( int it = 0; it < numberOfIterations; it++ )
         {
-            for( j = 0; j < numberOfRuns; j++ )
+            for( int run = 0; run < numberOfRuns; run++ )
             {
-                double temp = this.bestClassCohesionOverRuns[ j ][ i ] - averages[ i ];
-                double squaredValue = temp * temp;
-                squaredValueSums[ i ] += squaredValue;
+                iterationRetries[ run ] = this.retriesOverRuns[ run ][ it ]; 
+                iterationAttempts[ run ] = this.averageAttemptsOverRuns[ run ][ it ];
+            }
+            
+            this.retriesStdDev[ it ] = Utility.standardDeviation( iterationRetries );
+            this.attemptsStdDev[ it ] = Utility.standardDeviation( iterationAttempts );
+        }
+    
+        // 29 June 2017 for adaptive pheromone
+        double runningTotalBestFcomb[ ] = new double[ numberOfIterations ];
+        
+        for( int r = 0; r < numberOfRuns; r++ )
+        {
+            for( int iteration = 0; iteration < numberOfIterations; iteration++ )
+            {
+                runningTotalBestFcomb[ iteration ] += this.bestCombinedOverRuns[ r ][ iteration ];
             }
         }
         
-        for( i = 0; i < numberOfIterations; i++ )
+        assert numberOfRuns > 0; // prevent divide by zero error
+        
+        for( int i = 0; i < numberOfIterations; i++ )
         {
-            double temp2 = squaredValueSums[ i ] / (double) numberOfRuns;
-            // assert temp2 != 0.0;
-            this.finalBestClassCohesionSD[ i ] = Math.sqrt(  temp2 );
+            this.bestFcomb[ i ] = (double) runningTotalBestFcomb[ i ] / (double) numberOfRuns;
         }
-    }
-     
     
-    /**
-     * calculate the average of the average design coupling value
-     * for each iteration over a number of trials,
-     * and also calculate the standard deviation at the same time
-     */
-    private void calculateFinalAverageDesignCoupling( ) 
-    { 
-        double runningTotals[ ] = 
-            new double[ numberOfIterations ];
-        double averages[ ] =
-            new double[ numberOfIterations ];
-        double[ ] squaredValueSums = 
-            new double[ numberOfIterations ];
+        // 29 June 2017 for adaptive antipheromone
+        // calculate the standard deviations for retries and attempts
+        double localBestFcomb[ ] = new double[ numberOfIterations ];
         
-        int i = 0;
-        int j = 0;
-
-        for( i = 0; i < numberOfIterations; i++ )
+        for( int it = 0; it < numberOfIterations; it++ )
         {
-            runningTotals[ i ] = 0.0;
-            averages[ i ] = 0.0;
-            squaredValueSums[ i ] = 0;
-        }
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            for( j = 0; j < numberOfRuns; j++ )
+            for( int run = 0; run < numberOfRuns; run++ )
             {
-                runningTotals[ i ] += this.averageDesignCouplingOverRuns[ j ][ i ];
-                
-            }   // end for each trial
-        
-        }   // end for each iteration
-    
-        // calculate the average at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            averages[ i ] = runningTotals[ i ] / (double) numberOfRuns;
-            this.finalAverageDesignCoupling[ i ] = averages[ i ];
+                localBestFcomb[ run ] = this.bestCombinedOverRuns[ run ][ it ]; 
+            }
+            
+            this.bestFcombStdDev[ it ] = Utility.standardDeviation( localBestFcomb );
         }
-    
-        // calculate the standard deviation at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
+        
+        
+        
+        // 5 September 2018
+        double runningTotalInterference[ ] = new double[ numberOfIterations ];
+        
+        for( int it = 0; it < numberOfIterations; it++ )
         {
-            for( j = 0; j < numberOfRuns; j++ )
+            for( int run = 0; run < numberOfRuns; run++ )
             {
-                assert j < numberOfRuns : "j is: " + j;
-                double temp = this.averageDesignCouplingOverRuns[ j ][ i ] - averages[ i ];
-                double squaredValue = temp * temp;
-                squaredValueSums[ i ] += squaredValue;
+                runningTotalInterference[ it ] += this.interference[ run ][ it ]; 
             }
         }
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            double temp2 = squaredValueSums[ i ] / (double) numberOfRuns;
-            this.finalAverageDesignCouplingSD[ i ] = Math.sqrt(  temp2 );
-        }
-        
-    }
-    
-    private void calculateFinalBestElegance( )
-    {
-        double runningNACTotals[ ] = new double[ numberOfIterations ];
-        double averagesNAC[ ] = new double[ numberOfIterations ];
-        double[ ] squaredValueSumsNAC = new double[ numberOfIterations ];
-        
-        double runningATMRTotals[ ] = new double[ numberOfIterations ];
-        double averagesATMR[ ] = new double[ numberOfIterations ];
-        double[ ] squaredValueSumsATMR = new double[ numberOfIterations ];
-        
-        double runningEMTotals[ ] = new double[ numberOfIterations ];
-        double averagesEM[ ] = new double[ numberOfIterations ];
-        double[ ] squaredValueSumsEM = new double[ numberOfIterations ];
-        
-        int i = 0;
-        int j = 0;
 
-        for( i = 0; i < numberOfIterations; i++ )
+        for( int iter = 0; iter < numberOfIterations; iter++ )
         {
-            runningNACTotals[ i ] = 0.0;
-            averagesNAC[ i ] = 0.0;
-            squaredValueSumsNAC[ i ] = 0.0;
-            runningATMRTotals[ i ] = 0.0;
-            averagesATMR[ i ] = 0.0;
-            squaredValueSumsATMR[ i ] = 0.0;
-            runningEMTotals[ i ] = 0.0;
-            averagesEM[ i ] = 0.0;
-            squaredValueSumsEM[ i ] = 0.0;
-            
-        }
+            this.averageInterference[ iter ] = runningTotalInterference[ iter] / (double) numberOfRuns;
+        }        
         
-        for( i = 0; i < numberOfIterations; i++ )
+        
+        
+        double localInterference[ ] = new double[ numberOfIterations ];
+        
+        for( int it = 0; it < numberOfIterations; it++ )
         {
-            for( j = 0; j < numberOfRuns; j++ )
+            for( int run = 0; run < numberOfRuns; run++ )
             {
-                runningNACTotals[ i ] += this.bestEleganceNACOverRuns[ j ][ i ];
-                runningATMRTotals[ i ] += this.bestEleganceATMROverRuns[ j ][ i ];
-                runningEMTotals[ i ] += this.bestEleganceModularityOverRuns[ j ][ i ];
-                
-            }   // end for each run
-        
-        }   // end for each iteration
-    
-        // calculate the mean at each iteration
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            averagesNAC[ i ] = runningNACTotals[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceNAC[ i ] = averagesNAC[ i ];
-            averagesATMR[ i ] = runningATMRTotals[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceATMR[ i ] = averagesATMR[ i ];
-            averagesEM[ i ] = runningEMTotals[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceModularity[ i ] = averagesEM[ i ];
-        }
-    
-        // calculate the standard deviation at each iteration
-        double squaredValue = 0.0;
-        double temp = 0.0;
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            for( j = 0; j < numberOfRuns; j++ )
-            {
-                temp = this.bestEleganceNACOverRuns[ j ][ i ] - averagesNAC[ i ];
-                squaredValue = temp * temp;
-                squaredValueSumsNAC[ i ] += squaredValue;
-                
-                temp = this.bestEleganceATMROverRuns[ j ][ i ] - averagesATMR[ i ];
-                squaredValue = temp * temp;
-                squaredValueSumsATMR[ i ] += squaredValue;
-                
-                temp = this.bestEleganceModularityOverRuns[ j ][ i ] - averagesEM[ i ];
-                squaredValue = temp * temp;
-                squaredValueSumsATMR[ i ] += squaredValue;
+                localInterference[ run ] = this.interference[ run ][ it ]; 
             }
+            
+            this.averageInterferenceStdDev[ it ] = Utility.standardDeviation( localInterference );
         }
-        
-        for( i = 0; i < numberOfIterations; i++ )
-        {
-            temp = squaredValueSumsNAC[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceNACSD[ i ] = Math.sqrt(  temp );
-            
-            temp = squaredValueSumsATMR[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceATMRSD[ i ] = Math.sqrt(  temp );
-            
-            temp = squaredValueSumsEM[ i ] / (double) numberOfRuns;
-            this.finalBestEleganceModularitySD[ i ] = Math.sqrt(  temp );
-        }       
     }
     
+    
+    
+   
     
     
     /**
@@ -956,43 +845,43 @@ public class BatchResults
         out7.close( );
     }
     
-    /**
-     * write final results of heuristic ant search
-     * @param path 
-     */
-    public void writeFinalHeuristicResults( String path  )
-    {
-        assert path != null;
-        assert path.length( ) > 0;
-
-        // String heuristicsNACResultsFileFullName =  
-        //    Parameters.outputFilePath + "\\" + HEURISTIC_NAC_OUTPUT_NAME;
-        // 13 Nove 2015
-        String heuristicsNACResultsFileFullName =  
-            Parameters.outputFilePath + "/" + HEURISTIC_NAC_OUTPUT_NAME;
-        
-        System.out.println( "file name is: " + heuristicsNACResultsFileFullName );
-        final String dir = System.getProperty( "user.dir" );
-        System.out.println( "current dir = " + dir );
-        
-        // set up the output files
-        PrintWriter out1 = null;
-        
-        boolean append = true;
-        try 
-        {
-            // don't want to overwrite existing result files
-            out1 = new PrintWriter( new FileWriter( 
-                new File( heuristicsNACResultsFileFullName), append ) );
-        } 
-        catch( IOException ex ) 
-        {
-            Logger.getLogger(BatchResults.class.getName()).log(Level.SEVERE, null, ex);
-            System.out.println("Can't open " + heuristicsNACResultsFileFullName );
-        }   
-        
-        for( int run = 0; run < numberOfRuns; run++ )
-        {
+//    /**
+//     * write final results of heuristic ant search
+//     * @param path 
+//     */
+//    public void writeFinalHeuristicResults( String path  )
+//    {
+//        assert path != null;
+//        assert path.length( ) > 0;
+//
+//        // String heuristicsNACResultsFileFullName =  
+//        //    Parameters.outputFilePath + "\\" + HEURISTIC_NAC_OUTPUT_NAME;
+//        // 13 Nove 2015
+//        String heuristicsNACResultsFileFullName =  
+//            Parameters.outputFilePath + "/" + HEURISTIC_NAC_OUTPUT_NAME;
+//        
+//        System.out.println( "file name is: " + heuristicsNACResultsFileFullName );
+//        final String dir = System.getProperty( "user.dir" );
+//        System.out.println( "current dir = " + dir );
+//        
+//        // set up the output files
+//        PrintWriter out1 = null;
+//        
+//        boolean append = true;
+//        try 
+//        {
+//            // don't want to overwrite existing result files
+//            out1 = new PrintWriter( new FileWriter( 
+//                new File( heuristicsNACResultsFileFullName), append ) );
+//        } 
+//        catch( IOException ex ) 
+//        {
+//            Logger.getLogger(BatchResults.class.getName()).log(Level.SEVERE, null, ex);
+//            System.out.println("Can't open " + heuristicsNACResultsFileFullName );
+//        }   
+//        
+//        for( int run = 0; run < numberOfRuns; run++ )
+//        {
 //           out1.println( ( Parameters.problemNumber + 1 ) + " " +
 //                         AlgorithmParameters.weightCBO + " " +  
 //                         AlgorithmParameters.weightNAC + " " +
@@ -1003,29 +892,27 @@ public class BatchResults
 //                         this.whenCBOfound[ run ] + " " +
 //                         df.format( this.bestNAC[ run ] ) + " " + 
 //                         this.whenNACFound[ run ] ); 
-            
-            
-            int heuristics = AlgorithmParameters.heuristics ? 1 : 0;
-            
-            out1.println( ( Parameters.problemNumber + 1 ) + " " +
-                         heuristics + " " +
-                         AlgorithmParameters.BETA_CBO + " " +
-                         AlgorithmParameters.BETA_NAC + " " +
-                         ( run + 1 )  + " " + 
-                         df.format( this.bestCBO[ run ] ) + " " + 
-                         this.whenCBOfound[ run ] + " " +
-                         df.format( this.bestNAC[ run ] ) + " " + 
-                         this.whenNACFound[ run ] ); 
-        }
-            
-        out1.close( );
-    }
+//            
+//            
+//            int heuristics = AlgorithmParameters.heuristics ? 1 : 0;
+//            
+//            out1.println( ( Parameters.problemNumber + 1 ) + " " +
+//                         heuristics + " " +
+//                         AlgorithmParameters.BETA_CBO + " " +
+//                         AlgorithmParameters.BETA_NAC + " " +
+//                         ( run + 1 )  + " " + 
+//                         df.format( this.bestCBO[ run ] ) + " " + 
+//                         this.whenCBOfound[ run ] + " " +
+//                         df.format( this.bestNAC[ run ] ) + " " + 
+//                         this.whenNACFound[ run ] ); 
+//        }
+//            
+//        out1.close( );
+//    }
      
     
      /**
-     * write final results of ant search
-     * handles whether we're looking for fCBO, fNAC or fCOMB
-     * added 17 Nov 2015
+     * write results of ant search to file
      */
     public void writeResults( )
     {
@@ -1033,97 +920,304 @@ public class BatchResults
         
         if( AlgorithmParameters.fitness == AlgorithmParameters.CBO )
         {
-            outputFileName = BatchResults.BEST_COUPLING_FILE_NAME;
+            outputFileName = BEST_COUPLING_FILE_NAME;
         }
         else if( AlgorithmParameters.fitness == AlgorithmParameters.NAC )
         {
-            outputFileName = BatchResults.BEST_NAC_FILE_NAME;
+            outputFileName = BEST_NAC_FILE_NAME;
         }
         else if( AlgorithmParameters.fitness == AlgorithmParameters.COMBINED )
         {
-            outputFileName = BatchResults.BEST_COMBINED_FILE_NAME;
+            outputFileName = BEST_COMBINED_FILE_NAME;
         }
         else
         {
-            assert false; // execution should never reach this point    
+            System.out.println( "In writeResults for TSP..."); 
+            outputFileName = "NotRelevant.dat";
         }
         
-        // 13 November 2015
+        // 13 November 2015 for results 
+        // 29 June 2017 for retries, attempts and cost curves 
+        // 8 August 2018 and 3 September 2018 for interference
+        // 28 August 2018 for snapshots 
+        // 18 September 2018 for TSP
         String resultsFileFullName = "";
+        String retriesFileFullName = "";
+        String costFileFullName = "";
+        String interferenceFileFullName = "";
+        String snapShotFileFullName = "";
+        String interferenceIterationsForSPSSFileFullName = "";
+        String interferenceIterationsForGnuPlotFileFullName = "";
+        String TSPFileFullName = "";
+        
         
         if( Parameters.platform == Parameters.Platform.Windows )
         {
             resultsFileFullName = Parameters.outputFilePath + "\\" + outputFileName;
+            retriesFileFullName = Parameters.outputFilePath + "\\" + RETRIES_ATTEMPTS_FILE_NAME;
+            costFileFullName = Parameters.outputFilePath + "\\" + COST_FILE_NAME;
+            interferenceFileFullName = Parameters.outputFilePath + "\\" + INTERFERENCE_FILE_NAME;
+            snapShotFileFullName = Parameters.outputFilePath + "\\" + SNAPSHOT_FILE_NAME;
+            interferenceIterationsForSPSSFileFullName = Parameters.outputFilePath + "\\" + INTERFERENCE_ITERATIONS_FOR_SPSS_FILE_NAME;
+            interferenceIterationsForGnuPlotFileFullName = Parameters.outputFilePath + "\\" + INTERFERENCE_ITERATIONS_FOR_GNUPLOT_FILE_NAME;
+            TSPFileFullName = Parameters.outputFilePath + "\\" + BEST_TSP_FILE_NAME;
         }
         else    // we're on Mac
         {
             resultsFileFullName = Parameters.outputFilePath + "/" + outputFileName;
+            retriesFileFullName = Parameters.outputFilePath + "/" + RETRIES_ATTEMPTS_FILE_NAME;
+            costFileFullName = Parameters.outputFilePath + "/" + COST_FILE_NAME;
+            interferenceFileFullName = Parameters.outputFilePath + "/" + INTERFERENCE_FILE_NAME;
+            snapShotFileFullName = Parameters.outputFilePath + "/" + SNAPSHOT_FILE_NAME;
+            interferenceIterationsForSPSSFileFullName = Parameters.outputFilePath + "/" + INTERFERENCE_ITERATIONS_FOR_SPSS_FILE_NAME;
+            interferenceIterationsForGnuPlotFileFullName = Parameters.outputFilePath + "/" + INTERFERENCE_ITERATIONS_FOR_GNUPLOT_FILE_NAME;
+            TSPFileFullName = Parameters.outputFilePath + "/" + BEST_TSP_FILE_NAME;
         }
         
+        System.out.println( "fitness results file name is: " + resultsFileFullName );
+        System.out.println( "retries and attempts file name is: " + retriesFileFullName );
+        System.out.println( "cost information file name is: " + costFileFullName );
+        System.out.println( "interference file name is: " + interferenceFileFullName );
+        System.out.println( "snapshot file name is: " + snapShotFileFullName );
+        System.out.println( "interference iterations for SPSS file name is: " + interferenceIterationsForSPSSFileFullName );
+        System.out.println( "interference iterations for GnuPlot file name is: " + interferenceIterationsForGnuPlotFileFullName );
+        System.out.println( "TSP file name is: " + TSPFileFullName );
         
-        System.out.println( "file name is: " + resultsFileFullName );
         final String dir = System.getProperty( "user.dir" );
         System.out.println( "current execution directory is: " + dir );
         
         // set up the output files
         PrintWriter out1 = null;
+        PrintWriter out2 = null;
+        PrintWriter out3 = null;
+        PrintWriter out4 = null;
+        PrintWriter out5 = null;
+        PrintWriter out6 = null;
+        PrintWriter out7 = null;
+        PrintWriter out8 = null;
         
         boolean append = true;
         try 
         {
-            // don't want to overwrite existing result files
-            out1 = new PrintWriter( new FileWriter( 
-                new File( resultsFileFullName), append ) );
+            // we don't want to overwrite existing result files
+            out1 = new PrintWriter( new FileWriter( new File( resultsFileFullName), append ) );
+            out2 = new PrintWriter( new FileWriter( new File( retriesFileFullName), append ) );
+            out3 = new PrintWriter( new FileWriter( new File( costFileFullName), append ) );
+            out4 = new PrintWriter( new FileWriter( new File( interferenceFileFullName), append ) );
+            out5 = new PrintWriter( new FileWriter( new File( snapShotFileFullName), append ) );
+            out6 = new PrintWriter( new FileWriter( new File( interferenceIterationsForSPSSFileFullName), append ) );
+            out7 = new PrintWriter( new FileWriter( new File( interferenceIterationsForGnuPlotFileFullName), append ) );
+            out8 = new PrintWriter( new FileWriter( new File( TSPFileFullName), append ) );
+        
         } 
         catch( IOException ex ) 
         {
             Logger.getLogger( BatchResults.class.getName()).log(Level.SEVERE, null, ex );
-            System.out.println( "Can't open " + resultsFileFullName );
+            System.out.println( "Can't open one of the results files!!" );
         }   
         
         // for easier analysis in SPSS 14 Jan 2016
         int antiPheromoneOn = 0; // false
-        if( AlgorithmParameters.ANTIPHEROMONE_PHASE_THRESHOLD_PERCENTAGE > 0 )
+        if( AlgorithmParameters.antiPheromonePhasePercentage > 0 )
         {
             antiPheromoneOn = 1; // true
         }
         
         int MMAS_50_percent_on = 0; // false
-        if( AlgorithmParameters.MMAS_SUBTRACTIVE_ANTIPHEROMONE == true )
+        if( AlgorithmParameters.MMAS_REDUCE_BY_HALF == true )
         {
             MMAS_50_percent_on = 1;
         }
         
+        int prevent = 0;
+        if( AlgorithmParameters.preventInterference == true )
+        {
+            prevent = 1;
+        }
+        
+        assert AlgorithmParameters.antipheromoneStrength >= AlgorithmParameters.ANTIPHEROMONE_STRENGTH_SINGLE;
+        assert AlgorithmParameters.antipheromoneStrength <= AlgorithmParameters.ANTIPHEROMONE_STRENGTH_TRIPLE;
+        
         for( int run = 0; run < numberOfRuns; run++ )
         {
-            int evalsWhenCBOFound = this.whenCBOfound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
-            int evalsWhenNACFound = this.whenNACFound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
+//            int evalsWhenCBOFound = this.whenCBOfound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
+//            int evalsWhenNACFound = this.whenNACFound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
             int evalsWhenCombinedFound = this.whenCombinedFound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
-        
+            assert out1 != null;
+            
+            int localCopyOfAntipheromoneStrength = 0;
+            if( antiPheromoneOn == 0 )
+            {
+                // do nothing, local copy of antipheromone strength stays at zero
+            }
+            else
+            {
+                localCopyOfAntipheromoneStrength = AlgorithmParameters.antipheromoneStrength;
+            }
+            
             out1.println(   Parameters.problemNumber  + " " +
                             ( run + 1 )  + " " + 
-                            AlgorithmParameters.fitness + " " +
-                            AlgorithmParameters.algorithm + " " +
-                            AlgorithmParameters.NUMBER_OF_ANTS + " " +
+//                            AlgorithmParameters.fitness + " " +
+//                            AlgorithmParameters.algorithm + " " +
+//                            AlgorithmParameters.NUMBER_OF_ANTS + " " +
                             antiPheromoneOn + " " +
-                            AlgorithmParameters.ANTIPHEROMONE_PHASE_THRESHOLD_PERCENTAGE + " " +
-                            MMAS_50_percent_on + " " + 
-                            
-                            df.format( this.bestCBO[ run ] ) + " " + 
-                            evalsWhenCBOFound + " " +
-                            
-                            df.format( this.bestNAC[ run ] ) + " " + 
-                            evalsWhenNACFound + " " +
-                            
+                            AlgorithmParameters.antiPheromonePhasePercentage + " " +
+//                            MMAS_50_percent_on + " " + 
+//                            df.format( this.bestCBO[ run ] ) + " " + 
+//                            evalsWhenCBOFound + " " +
+//                            df.format( this.bestNAC[ run ] ) + " " + 
+//                            evalsWhenNACFound + " " +
                             df.format( this.bestCombined[ run ] ) + " " + 
                             evalsWhenCombinedFound + " " +
                     
-                            this.maxNumberOfInvalids[ run ] );
+                            // 26 June 2018
+                            // this.maxNumberOfInvalids[ run ] );
+                            localCopyOfAntipheromoneStrength + " " +
+                            AlgorithmParameters.antipheromoneStrength + " " + 
+                            
+                            // 21 August 2018
+                            prevent );
         }
             
+        
+        // 28 June 2017 for adaptive antipheromone
+        // write retry and attempt information to file
+        for( int iteration = 0; iteration < numberOfIterations; iteration++ )
+        {
+            assert out2 != null;
+            out2.println(   
+                Parameters.problemNumber  + " " +
+                AlgorithmParameters.pheromoneStrength + " " +
+                AlgorithmParameters.antipheromoneStrength + " " +
+                prevent + " " +
+                antiPheromoneOn + " " +
+                AlgorithmParameters.antiPheromonePhasePercentage + " " +
+
+                ( iteration + 1 )  + " " + 
+                df.format( this.averageRetries[ iteration ] ) + " " +
+                df.format( this.retriesStdDev[ iteration ] ) + " " +
+                df.format( this.averageOfAverageAttempts[ iteration ] ) + " " +
+                df.format( this.attemptsStdDev[ iteration ]) );
+        }
+        
+        
+        
+        // 29 June 2017 
+        // write cost information to file
+        for( int iteration = 0; iteration < numberOfIterations; iteration++ )
+        {
+            assert out3 != null;
+            out3.println(   
+                Parameters.problemNumber  + " " +
+                AlgorithmParameters.pheromoneStrength + " " +
+                AlgorithmParameters.antipheromoneStrength + " " +
+                prevent + " " +
+                antiPheromoneOn + " " +
+                AlgorithmParameters.antiPheromonePhasePercentage + " " +
+                ( iteration + 1 )  + " " + 
+                
+                df.format( this.bestFcomb[ iteration ] ) + " " +
+                df.format( this.bestFcombStdDev[ iteration ] ) );
+        }
+        
+        
+        // 8 August 2018
+        for( int run = 0; run < numberOfRuns; run++ )
+        {
+            assert out4 != null;
+            out4.println(   
+                Parameters.problemNumber + " " + 
+                AlgorithmParameters.pheromoneStrength  + " " +            
+                AlgorithmParameters.antipheromoneStrength  + " " +
+                prevent + " " +
+                antiPheromoneOn + " " +
+                AlgorithmParameters.antiPheromonePhasePercentage + " " +
+                ( run + 1 ) + " " + 
+                df.format( this.interference[ run ][ numberOfIterations - 1 ] ) );
+        }
+        
+        // 23 August 2018
+        for( int run = 0; run < numberOfRuns; run++ )
+        {
+            assert out5 != null;
+            out5.println(   
+                Parameters.problemNumber + " " + 
+                AlgorithmParameters.pheromoneStrength  + " " +            
+                AlgorithmParameters.antipheromoneStrength  + " " +
+                prevent + " " +
+                antiPheromoneOn + " " +
+                AlgorithmParameters.antiPheromonePhasePercentage + " " +
+                ( run + 1 ) + " " + 
+                df.format( this.bestCombinedValueAt50OverRuns[ run ] ) + " " +
+                df.format( this.bestCombinedValueAt100OverRuns[ run ] ) + " " +
+                df.format( this.bestCombinedValueAt150OverRuns[ run ] ) + " " +
+                df.format( this.bestCombinedValueAt200OverRuns[ run ] ) + " " +
+                df.format( this.bestCombinedValueAt300OverRuns[ run ] ) + " " +
+                df.format( this.bestCombinedValueAt400OverRuns[ run ] ) + " " + 
+                df.format( this.areaAt50OverRuns[ run ] ) + " " + 
+                df.format( this.areaAt100OverRuns[ run ] ) + " " +
+                df.format( this.areaAt150OverRuns[ run ] ) + " " +
+                df.format( this.areaAt200OverRuns[ run ] ) + " " +
+                df.format( this.areaAt300OverRuns[ run ] ) + " " +
+                df.format( this.areaAt400OverRuns[ run ] ) );
+        }
+        
+        
+        // 3 September 2018 
+        // write information regarding interference at iterations to file
+        for( int iteration = 0; iteration < numberOfIterations; iteration++ )
+        {
+            assert out6 != null;
+            assert out7 != null;
+            
+            // for SPSS...
+            out6.println(   
+                Parameters.problemNumber  + " " +
+                AlgorithmParameters.pheromoneStrength + " " +
+                AlgorithmParameters.antipheromoneStrength + " " +
+                prevent + " " +
+                antiPheromoneOn + " " +
+                AlgorithmParameters.antiPheromonePhasePercentage + " " +
+                ( iteration + 1 )  + " " + 
+                df.format( this.averageInterference[ iteration ] ) + " " +
+                df.format( this.averageInterferenceStdDev[ iteration ] ) );
+            
+            // for GnuPlot 
+            out7.println(   
+                ( iteration + 1 )  + " " + 
+                df.format( this.averageInterference[ iteration ] ) + " " +
+                df.format( this.averageInterferenceStdDev[ iteration ] ) );
+        }
+        
+        
+        // 18 September 2018
+        for( int run = 0; run < numberOfRuns; run++ )
+        {
+            int evalsWhenTSPBestFound = this.whenBestTSPLengthFound[ run ] * AlgorithmParameters.NUMBER_OF_ANTS;
+            assert out8 != null;
+            
+            out8.println(Parameters.problemNumber  + " " +
+                            AlgorithmParameters.fitness + " " +
+                            AlgorithmParameters.pheromoneStrength + " " +
+                            AlgorithmParameters.antipheromoneStrength + " " + 
+                            prevent + " " +
+                            ( run + 1 )  + " " + 
+                            antiPheromoneOn + " " +
+                            AlgorithmParameters.antiPheromonePhasePercentage + " " +
+                            df.format(this.bestTSPLength[ run ] ) + " " + 
+                            evalsWhenTSPBestFound );
+        }
+
         out1.close( );
+        out2.close( );
+        out3.close( );
+        out4.close( );
+        out5.close( );
+        out6.close( );
+        out7.close( );
+        out8.close( );
+        
     }
-     
     
 }   // end class
 

@@ -28,16 +28,35 @@ public class Path
     
     private boolean valid; // i.e. complies with constraints
     
-    /** constructor for a path */
+    // 17 September 2018
+    private double tspPathLength;
+    
+    /** 
+     * constructor for a path with a role
+     * i.e. for the software design problem instances
+     * @param role
+     */
     public Path( Role role )
     {
-        list = new ArrayList< Node >( );
+        list = new ArrayList< >( );
         assert role != null;
         this.role = role;
         dominationCount = 0; 
         valid = false;
+        tspPathLength = 0.0;
     }
     
+    /** constructor for path without a role
+     * i.e. the TSP
+     */
+    public Path( )
+    {
+        list = new ArrayList< >( );
+        role = null; // not used
+        dominationCount = 0; // not used
+        valid = false;
+        tspPathLength = 0.0;
+    }
    
     /**
      * add a node to the path
@@ -46,8 +65,8 @@ public class Path
     public void add( Node node )
     {
         assert node != null;
-        assert list != null;
-        list.add( node );
+        assert this.list != null;
+        this.list.add( node );
     }
     
     /**
@@ -137,7 +156,8 @@ public class Path
      */
     public double getCBO(  ) 
     { 
-        assert role.getDistinction( ) == Role.Distinction.design;
+        // Chris commented out 18 September 2018
+        //assert role.getDistinction( ) == Role.Distinction.design;
         
         return role.getExternalCoupling( ); 
     }
@@ -267,6 +287,23 @@ public class Path
      */
     public void setValid(boolean valid) {
         this.valid = valid;
+    }
+
+    /**
+     * @return the tspCost
+     */
+    public double getTSPPathLength() 
+    {
+        return tspPathLength;
+    }
+
+    /**
+     * @param tspCost the tspCost to set
+     */
+    public void setTSPathLength( double tspCost ) 
+    {
+        assert tspCost > 0.0;
+        this.tspPathLength = tspCost;
     }
 
 }   // end class

@@ -1,5 +1,6 @@
 /**
  * BatchMain.java
+ * 6 June 2017
  * @author Chris Simons
  */
 
@@ -10,13 +11,11 @@ import config.Parameters;
 import engine.Controller;
 import problem.ProblemController;
 
-
 public class BatchMain 
 {
-    /**
-     * BatchMain developed for anti-pheromone experiments
-     * November 2015
-    */
+    private static ProblemController problemController;
+    
+    // starting point for anti-pheromone experiments
     public static void main( String[] args ) 
     {
         assert args != null;
@@ -25,100 +24,164 @@ public class BatchMain
             assert false : "no command line arguments required";
         }    
         
-        assert Parameters.mode == Parameters.Mode.Batch;
+        // set up output file path for appropriate platform here
+        Parameters.platform = Parameters.platform.Windows;
+        // Parameters.platform = Parameters.platform.Mac;
         
-        // Nov 2015 set up output file path for appropriate platform
         if( Parameters.platform == Parameters.Platform.Mac )
         {
-            Parameters.outputFilePath = "/Users/Chris/Documents/data";
-            System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
+            Parameters.outputFilePath = "/Users/Chris/data";
         }
         else // must be Windows
         {
-            // Parameters.outputFilePath = "W:\\Research\\Writings\\2015 Paper 42 - Antipheromone GECCO 2016\\data";
-            
-            Parameters.outputFilePath = "C:\\Users\\cl-simons\\Dropbox\\2015 10 Antipheromone\\data";
-            System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
+            Parameters.outputFilePath = "C:\\Users\\cl-simons\\ACO_results";
         }
         
-        final boolean reloadMatrix = false;
-        AlgorithmParameters.NUMBER_OF_ANTS = 100;
-        AlgorithmParameters.NUMBER_OF_ITERATIONS = 
-            AlgorithmParameters.NUMBER_OF_EVALUATIONS / AlgorithmParameters.NUMBER_OF_ANTS;
-        
-        AlgorithmParameters.algorithm = AlgorithmParameters.MMAS;
-        AlgorithmParameters.constraintHandling = false;
-        
-        AlgorithmParameters.fitness = AlgorithmParameters.NAC;
-            
-        for( int problem = Parameters.CBS; problem <= Parameters.RANDOMISED; problem++ )
+        // set up parameters for each algorithm
+        if( AlgorithmParameters.algorithm == AlgorithmParameters.SIMPLE_ACO )
         {
-            
-            // firstly, set MMAS to usual i.e. reduce to minimum of MAXMIN
-            AlgorithmParameters.MMAS_SUBTRACTIVE_ANTIPHEROMONE = false;
-                
-            for( int x = 0; x < 10; x++ )
+            AlgorithmParameters.alpha = AlgorithmParameters.ALPHA_SD;
+            AlgorithmParameters.mu = AlgorithmParameters.MU_SD;
+            AlgorithmParameters.rho = AlgorithmParameters.SimpleACO_RHO;
+        }
+        else if( AlgorithmParameters.algorithm == AlgorithmParameters.MMAS )
+        {
+            if( AlgorithmParameters.fitness == AlgorithmParameters.CBO || 
+                AlgorithmParameters.fitness == AlgorithmParameters.NAC ||
+                AlgorithmParameters.fitness == AlgorithmParameters.COMBINED )
             {
-                AlgorithmParameters.ANTIPHEROMONE_PHASE_THRESHOLD_PERCENTAGE = x;
-                System.out.println( "******* problem is: " + problem + 
-                    ", fitness is: " + AlgorithmParameters.fitness + 
-                    ", MMAS subtractive AP is: " + AlgorithmParameters.MMAS_SUBTRACTIVE_ANTIPHEROMONE +
-                    ", AP Threshold is: " + x + " ******"  );
-                doAntSearch( problem, reloadMatrix );
-
-            }   // end for threshold values 0..9
-
-            for( int y = 10; y <= 100; y += 10 )
+                AlgorithmParameters.alpha = AlgorithmParameters.ALPHA_SD;
+                AlgorithmParameters.mu = AlgorithmParameters.MU_SD;
+                AlgorithmParameters.rho = AlgorithmParameters.MMAS_RHO_SD;
+                AlgorithmParameters.MMAS_Mmax = AlgorithmParameters.MMAS_PHEROMONE_MAXIMUM_SD;
+                AlgorithmParameters.MMAS_Mmin = AlgorithmParameters.MMAS_PHEROMONE_MINIMUM_SD;
+            }
+            else if( AlgorithmParameters.fitness == AlgorithmParameters.TSP_PATH_LENGTH )
             {
-                AlgorithmParameters.ANTIPHEROMONE_PHASE_THRESHOLD_PERCENTAGE = y;
-                System.out.println( "******* problem is: " + problem + 
-                    ", fitness is: " + AlgorithmParameters.fitness +
-                    ", MMAS subtractive AP is: " + AlgorithmParameters.MMAS_SUBTRACTIVE_ANTIPHEROMONE + 
-                    ", AP Threshold is: " + y + " ******"  );
-                doAntSearch( problem, reloadMatrix );
-
-            }   // end for threshold values 10..100
-            
-            
-         
-        }   // end for each fitness measure 
+                AlgorithmParameters.alpha = AlgorithmParameters.ALPHA_TSP;
+                AlgorithmParameters.mu = AlgorithmParameters.MU_TSP;
+                AlgorithmParameters.rho = AlgorithmParameters.MMAS_RHO_TSP;
+                AlgorithmParameters.MMAS_Mmax = AlgorithmParameters.MMAS_PHEROMONE_MAXIMUM_TSP;
+                AlgorithmParameters.MMAS_Mmin = AlgorithmParameters.MMAS_PHEROMONE_MINIMUM_TSP;
+            }
+            else
+            {
+                assert false : "impossible MMAS fitness!";
+            }
+        }   
+        else
+        {
+            assert false : "impossible algorithm to set RHO!";
+        }
         
-    }
+        // 22 November 2018
+        Parameters.problemNumber = Parameters.TSP_RAT195; 
+        generateProblem( Parameters.problemNumber );
+        checkSetUpForTSP( );
+        
+        // 28 November 2018 
+        assert AlgorithmParameters.pheromoneStrength == AlgorithmParameters.MMAS_PHEROMONE_SINGLE;
+        assert AlgorithmParameters.MMAS_ANTIPHEROMONE == true;
+        assert AlgorithmParameters.preventInterference == true;
+        showParameters( );
+        
+        
+        // for pheromone runs
+//        for( int P_Strength = AlgorithmParameters.MMAS_PHEROMONE_SINGLE; 
+//             P_Strength <= AlgorithmParameters.MMAS_PHEROMONE_TRIPLE;
+//             P_Strength++ )
+//        {
+//            AlgorithmParameters.pheromoneStrength = P_Strength;
+//            System.out.println( "problem is: " + getProblemNumberAsString( Parameters.problemNumber ) );
+//            System.out.println( "pheromone strength is: " + AlgorithmParameters.pheromoneStrength + "\n" );
+//            
+//            doAntSearch( );
+//        }
+        
+        // for antipheromone runs
+        for( int AP_Strength = AlgorithmParameters.ANTIPHEROMONE_STRENGTH_DOUBLE; 
+             AP_Strength <= AlgorithmParameters.ANTIPHEROMONE_STRENGTH_TRIPLE;
+             AP_Strength++ )
+        {
+            AlgorithmParameters.antipheromoneStrength = AP_Strength;
+//            System.out.println( "problem is: " + getProblemNumberAsString( Parameters.problemNumber ) );
+//            System.out.println( "antipheromone  strength is: " + AlgorithmParameters.antipheromoneStrength + "\n" );
+            
+            for( int ap = 0; ap <= 10; ap++ )
+            {
+                AlgorithmParameters.antiPheromonePhasePercentage = ap;
+                
+                System.out.println( 
+                    "******* problem is: " + getProblemNumberAsString( Parameters.problemNumber ) + 
+                    ", antipheromone strength is: " + AlgorithmParameters.antipheromoneStrength +        
+                    ", AP percent phase is: " + AlgorithmParameters.antiPheromonePhasePercentage + " ******"  );
+
+                doAntSearch( );
+            }
+        }   
+        
+    }   // end main
     
     /**
      * do the ant search
-     * only re-load the use matrix if 
-     * @param problemNumber
-     * @param useMatrixReloadSelected 
+     * Design problem have been set up
+     * 14 June 2017
      */
-    
-    public static void doAntSearch( int problemNumber, boolean useMatrixReloadSelected )
+    public static void doAntSearch( )
+    {
+        assert problemController != null;
+        
+        Controller controller = new Controller( problemController );
+        
+        for( int i = 0; i < Parameters.NUMBER_OF_RUNS; i++ )
+        {
+           controller.run( i );    
+        }
+        
+        controller.writeResultstoFile( );
+        System.out.println( "ACO complete!" );
+    }
+
+    /**
+     * Generate the correct design problem for the current batch run,
+     * and generate it only once. 
+     * 14 June 2017
+     * @param problemNumber as int
+     */
+    private static void generateProblem( final int problemNumber )
     {
         assert problemNumber >= 0;
-        assert problemNumber <= Parameters.NUMBER_OF_PROBLEMS;
+        assert problemNumber < Parameters.NUMBER_OF_PROBLEMS;
         
-        Parameters.problemNumber = problemNumber;
+        problemController = new ProblemController( );
+        assert problemController != null;
         
-        System.out.println( "Number of Ants is : " + AlgorithmParameters.NUMBER_OF_ANTS ); 
-        System.out.println( "Number of Iterations is : " + AlgorithmParameters.NUMBER_OF_ITERATIONS );
-        
-        ProblemController problemController = new ProblemController( );
-        
-        if( problemNumber == Parameters.CBS ) // Cinema Booking System
+        // set up the Cinema Booking System (CBS) design problem
+        if( problemNumber == Parameters.CBS ) 
         {
             problemController.createDesignProblem5( );
             problemController.setNumberOfClasses( 5 );
             problemController.generateUseMatrix( );
-           // problemController.writeUseMatrixToFile( path, "CBS" );
         }
-        else if( problemNumber == Parameters.GDP ) // GDP
+        // set up the GDP design problem
+        else if( problemNumber == Parameters.GDP ) 
         {
             problemController.createDesignProblem7( );
             problemController.setNumberOfClasses( 5 );
             problemController.generateUseMatrix( );
-            //problemController.writeUseMatrixToFile( path, "GDP" );
         }
-        else if( problemNumber == Parameters.SC ) // Select Cruises
+        // set up the Randomised design problem
+        else if( problemNumber == Parameters.RANDOMISED  ) 
+        {
+            problemController.createDesignProblem8( );
+            problemController.setNumberOfClasses( 8 );
+                   
+            // 21 January 2016
+            problemController.initialiseWithPreGenerated( );
+            // problemController.showUseMatrix( );
+        } 
+        // set up the Select Cruises (SC) design problem
+        else if( problemNumber == Parameters.SC ) 
         {
             problemController.createDesignProblem6( );
             problemController.setNumberOfClasses( 16 );
@@ -126,405 +189,169 @@ public class BatchMain
 //            problemController.setNumberOfClasses( 5 );
             
             problemController.generateUseMatrix( );
-            //problemController.writeUseMatrixToFile( path, "SC" );
         }
-        else if( problemNumber == Parameters.RANDOMISED ) // Randomised
+        else if( problemNumber == Parameters.TSP_BERLIN52 )
         {
-            problemController.createDesignProblem8( );
-            problemController.setNumberOfClasses( 8 );
-            
-//            if( useMatrixReloadSelected == false  )
-//            {
-//                problemController.generateUseMatrix( );
-//              //  problemController.writeUseMatrixToFile( path, "Randomised" );
-////                problemController.showActionsAndData( );
-//                problemController.showUseMatrix( );
-//            }
-//            else // reload previous matrix
-//            {
-//                System.out.println( "reload selected" );
-//                problemController.reloadUseMatrix( ".");
-//                problemController.reloadUseTable( );
-//                problemController.showActionsAndData( );
-//            }
-            
-            // 21 January 2016
-            problemController.initialiseWithPreGenerated( );
-            // problemController.showUseMatrix( );
-        }        
+            problemController.createTSPBerlin52Problem( );
+        }
+        else if( problemNumber == Parameters.TSP_ST70 )
+        {
+            problemController.createTSPST70Problem( );
+        }
+        else if( problemNumber == Parameters.TSP_RAT99 )
+        {
+            problemController.createTSPRAT99Problem( );
+        }
+        else if( problemNumber == Parameters.TSP_RAT195 )
+        {
+            problemController.createTSPRAT195Problem( );
+        }
         else
         {
             assert false : "impossible design problem!!";
         }
-
-        // 17 January 2013
-        Controller controller = new Controller( problemController );
-        
-        for( int i = 0; i < Parameters.NUMBER_OF_RUNS; i++ )
-        {
-           controller.run( i );       
-        }
-        
-        controller.writeResultstoFile( );
-        System.out.println( "batch ACO complete" );
     }
-
+    
     /**
-     * 30 March 2012
-     * do Batch Ant Search
+     * for convenience, express problem number as string
+     * 14 June 2018
+     * @param problem number 
      */
-    private static void doBatchAntSearch( ) 
+    private static String getProblemNumberAsString( final int problem )
     {
-        // 30 March 2012
-//        double[ ] alpha = { 0.0, 0.5, 1.0, 1.5, 2.0 };
-//        double[ ] mu = { 0.0, 0.5, 1.0, 1.5, 2.0 };
-//        double[ ] rho = {  0.0, 0.05, 0.1, 0.25, 1.0 };
-//        int[ ] ants = { 25, 100 /* 25, 100, 200 */ };
-//        final int NUMBER_OF_RUNS = 50;
-//        final int NUMBER_OF_ITERATIONS = 1000;
-//        int[ ] problems = { 0, 1, 2 };
-        
-        // 18 April 2012 - CBS only
-//        double[ ] alpha = { 0.0, 0.5, 1.0, 1.5, 2.0, 2.5 };
-//        double[ ] mu = { 0.0, 0.5, 1.0, 1.5, 2.0, 2.5 };
-//        double[ ] rho = {  0.0, 0.001, 0.01, 0.05, 0.1, 0.25, 1.0 };
-//        int[ ] ants = { 25, 100 };
-//        final int NUMBER_OF_RUNS = 50;
-//        final int NUMBER_OF_ITERATIONS = 1000;
-//        final int NUMBER_OF_EVALUATIONS = 100000;
-//        int[ ] problems = { /* 0, */ 1 /* 2 */ };
-        
-        
-//        double[ ] alpha = { 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0 };
-//        double[ ] mu = { 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5 };
-//        double[ ] rho = {  0.0, 0.01, 0.1, 0.25, 0.5, 1.0 };
-//        int[ ] ants = { 25, 100, 250 };
-//        final int NUMBER_OF_RUNS = 50;
-//        final int NUMBER_OF_ITERATIONS = 100;
-//        final int NUMBER_OF_EVALUATIONS = 100000;
-        
-        
-        double[ ] alpha = { 1.0 };
-        double[ ] mu = { 3.0 };
-        double[ ] rho = {  0.01 };
-        int[ ] ants = { 25 };
-        final int NUMBER_OF_RUNS = 50;
-//        final int NUMBER_OF_ITERATIONS = 100;
-        final int NUMBER_OF_EVALUATIONS = 250;
-      
-        int[ ] problems = { 0, 1 /* 2 */ };   
-        
-        
-        int counter = 0;
-        
-        for( int i = 0; i < alpha.length; i++ )
+        String result = "";
+        switch( problem )
         {
-            for( int j = 0; j < mu.length; j++ )
+            case Parameters.CBS:
+                result = "CBS";
+                break;
+            case Parameters.GDP:
+                result = "GDP";
+                break;
+            case Parameters.RANDOMISED:
+                result = "Randomised";
+                break;
+            case Parameters.SC:
+                result = "SC";
+                break;
+            case Parameters.TSP_BERLIN52:
+                result = "TSP Berlin 52 Cities";
+                break;
+            case Parameters.TSP_ST70:
+                result = "TSP ST 70 Cities";
+                break;
+            case Parameters.TSP_RAT99:
+                result = "TSP RAT 90 Cities";
+                break;
+            case Parameters.TSP_RAT195:
+                result = "TSP RAT 195 Cities";
+                break;
+            default:
+                assert false: "unknown problem instance!!";
+                break;
+        }
+        return result;
+    }
+    
+    /**
+     * show the configured run parameters and algorithms parameters
+     * 13 June 2018
+     */
+    private static void showParameters( )
+    {
+        System.out.println( "RUN PARAMETERS" );
+        System.out.println( "\tproblem instance: " + getProblemNumberAsString( Parameters.problemNumber ) );
+        System.out.println( "\tselected path for output files: " + Parameters.outputFilePath );
+        System.out.println( "\tnumber of runs: " + Parameters.NUMBER_OF_RUNS ); 
+   
+        System.out.println( "ALGORITHM PARAMETERS");
+        System.out.println( "\tants: " + AlgorithmParameters.NUMBER_OF_ANTS );
+        System.out.println( "\tevaluations: " + AlgorithmParameters.NUMBER_OF_EVALUATIONS );
+        
+        String s1 = "";
+        switch( AlgorithmParameters.fitness )
+        {
+            case 1: s1 = "CBO"; break;
+            case 2: s1 = "NAC"; break;
+            case 3: s1 = "Combined"; break;
+            case 4: s1 = "TSP cost"; break;
+            default: s1 = "Unknown!!"; break;
+        }
+        System.out.println( "\tfitness: " + s1 );
+        
+        System.out.println( "\tconstraint handling: " + AlgorithmParameters.constraintHandling );
+        System.out.println( "\theuristics: " + AlgorithmParameters.heuristics );
+           
+        System.out.println( "\tALPHA: " + AlgorithmParameters.alpha );
+        System.out.println( "\tMU: " + AlgorithmParameters.mu );
+        
+        if( AlgorithmParameters.algorithm == AlgorithmParameters.SIMPLE_ACO ) 
+        {
+            System.out.println( "\talgorithm: Simple-ACO" );
+            System.out.println( "\tRHO: " + AlgorithmParameters.rho );
+            String s2 = AlgorithmParameters.SIMPLE_ACO_SUBTRACTIVE_ANTIPHEROMONE == false ? "OFF" : "ON"; 
+            System.out.println( "\tSimple ACO subtractive antipheromone: " + s2 );
+            if( AlgorithmParameters.SIMPLE_ACO_SUBTRACTIVE_ANTIPHEROMONE == true )
             {
-                for( int k = 0; k < rho.length; k++ )
+                System.out.println( "\tPHI: " + AlgorithmParameters.PHI );
+            }
+        }
+        else    // must be MMAS
+        {
+            assert AlgorithmParameters.algorithm == AlgorithmParameters.MMAS;
+            System.out.println( "\talgorithm: MMAS" );
+            System.out.println( "\trho: " + AlgorithmParameters.rho );
+            System.out.println( "\tpheromone strength: " + AlgorithmParameters.pheromoneStrength );
+            String s3 = AlgorithmParameters.MMAS_ANTIPHEROMONE == false ? "OFF" : "ON";       
+            System.out.println( "\tMMAS antipheromone: " + s3 );
+            if( AlgorithmParameters.MMAS_ANTIPHEROMONE == true )
+            {
+                if( AlgorithmParameters.MMAS_REDUCE_BY_HALF == true )
                 {
-                    for( int l = 0; l < ants.length; l++ )
-                    {
-                        for( int m = 0; m < problems.length; m++ )
-                        {
-//                            Parameters.reset( );
-//                            
-//                            Parameters.ALPHA = alpha[ k ];
-//                            Parameters.MU = mu[ k ];
-//                            Parameters.RHO = rho[ k ];
-//                            Parameters.numberOfAnts = ants[ l ];
-//                            
-//                            Parameters.numberOfIterations = NUMBER_OF_EVALUATIONS / ants[ l ];
-////                            Parameters.numberOfIterations = NUMBER_OF_ITERATIONS;
-//                            Parameters.numberOfTrials = NUMBER_OF_RUNS;
-//                            
-//                            Parameters.problemNumber = problems[ m ];
-//                            
-//                            Parameters.runIdentifier = problems[ m ] + " " + ants[ l ] + " " + alpha[ k ] + " " + mu[ k ] + " " + rho[ k ]  ;
-//        
-//                            
-//                            System.out.println( Parameters.runIdentifier );
-                            counter++; 
-                            
-                            doAntSearch( Parameters.problemNumber, false );  
-                        }
-                    }
+                    System.out.println( "\tMMAS antipheromone => reduce by half" );
                 }
+                else
+                {
+                    System.out.println( "\tMMAS antipheromone => reduce to Min" );
+                }
+                System.out.println( "\tAntipheromone strength: " + AlgorithmParameters.antipheromoneStrength );
             }
-        }
-        
-        System.out.println( "number of run combinations is: " + counter );
-    }
-    
-    /**
-     * do heuristic ant search in batch 
-     */
-    private static void doBatchHeuristicAntSearch( )
-    {
-        int[ ] problems = { 0 };
-        double[ ] betaCBOs = { 1.0, 1.5, 2.0, 2.5, 3.0 };
-//        double[ ] betaNACs = { 0.0 };
-        double[ ] weightsCBO = { 1.0  };
-        
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q2\\temp";
-//        Parameters.outputFilePath = "F:\\temp";
-        
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-        
-        for( int i = 0; i < problems.length; i++ )
-        {
-            Parameters.problemNumber = problems[ i ];
-            System.out.println( "Problem number is: " + i );
             
-            for( int j = 0; j < betaCBOs.length; j++ )
-            {
-                AlgorithmParameters.BETA_CBO = betaCBOs[ j ];
-                        
-//                for( int k = 0; k <betaNACs.length; k++ )
-//                {
-//                    AlgorithmParameters.BETA_NAC = betaNACs[ k ];
-//                    
-                    for( int l = 0; l < weightsCBO.length; l++ )
-                    {
-                        AlgorithmParameters.weightCBO = weightsCBO[ 0 ];
-                        AlgorithmParameters.weightNAC = 1.0 - AlgorithmParameters.weightCBO;
-                        doAntSearch( problems[ i ], false );
-                    }    
-                        
-//                }
-            }
+            System.out.println("\tinterference prevention: " + AlgorithmParameters.preventInterference );
         }
     }
     
-    
-    private static void experiment_2013_06_26( String[ ] args )
+    private static void checkSetUpForTSP( )
     {
-        int problemNumber = Integer.parseInt( args[ 0 ] );
-        assert problemNumber >= 0;
-        Parameters.problemNumber = problemNumber;
-
-        double[ ] betaCBOs = { 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0 };
-
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_06_26";
-//            Parameters.outputFilePath = ".";
-//            Parameters.outputFilePath = "F:\\temp";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        for( int j = 0; j < betaCBOs.length; j++ )
+        if( Parameters.problemNumber != Parameters.TSP_BERLIN52 &&
+            Parameters.problemNumber != Parameters.TSP_ST70 &&
+            Parameters.problemNumber != Parameters.TSP_RAT99 &&
+            Parameters.problemNumber != Parameters.TSP_RAT195 )
         {
-            AlgorithmParameters.BETA_CBO = betaCBOs[ j ];
-            doAntSearch( problemNumber, false );
+            assert false : "TSP problem instance not selected";
         }
+        
+        assert AlgorithmParameters.fitness == AlgorithmParameters.TSP_PATH_LENGTH;   
+        
+        assert AlgorithmParameters.algorithm == AlgorithmParameters.MMAS;
+        assert AlgorithmParameters.alpha == AlgorithmParameters.ALPHA_TSP;
+        assert AlgorithmParameters.mu == AlgorithmParameters.MU_TSP;
+        assert AlgorithmParameters.rho == AlgorithmParameters.MMAS_RHO_TSP;
+        assert AlgorithmParameters.MMAS_Mmax ==  AlgorithmParameters.MMAS_PHEROMONE_MAXIMUM_TSP;
+        assert AlgorithmParameters.MMAS_Mmin ==  AlgorithmParameters.MMAS_PHEROMONE_MINIMUM_TSP;
+        
+        if( AlgorithmParameters.MMAS_ANTIPHEROMONE == true )
+        {
+            assert AlgorithmParameters.preventInterference == true;
+        }
+        else
+        {
+            assert AlgorithmParameters.preventInterference == false;
+        }
+        
+        assert AlgorithmParameters.constraintHandling == false;
     }
-
-    private static void experiment_2013_07_02( )
-    {
-        double[ ] betaCBOs = { 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25 };
-
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_07_02";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 2; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            for( int j = 0; j < betaCBOs.length; j++ )
-            {
-                AlgorithmParameters.BETA_CBO = betaCBOs[ j ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaCBO value of " + betaCBOs[ j ] );
-                doAntSearch( problem, false );
-            }
-        }
-    }
-    
-    private static void experiment_2013_07_07( )
-    {
-        double[ ] betaCBOs = { 1.0 };
-        
-            // 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25 };
-
-        Parameters.outputFilePath = "D:\\output";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 2; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            for( int j = 0; j < betaCBOs.length; j++ )
-            {
-                AlgorithmParameters.BETA_CBO = betaCBOs[ j ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaCBO value of " + betaCBOs[ j ] );
-                doAntSearch( problem, false );
-            }
-        }
-    }
-    
-    private static void experiment_2013_07_09( )
-    {
-     
-        Parameters.outputFilePath = "D:\\output";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 1; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            System.out.println( "\t" + "doing ACO for problem " + problem );
-            doAntSearch( problem, false );
-        }
-    }
-
-    private static void experiment_2013_07_22( )
-    {
-     
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_07_22";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        // first without the NAC heuristics
-        AlgorithmParameters.heuristics = false;
-        
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 0; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            System.out.println( "\t" + "doing ACO for problem " + problem );
-            doAntSearch( problem, false );
-        }
-        
-        // secondly with the NAC heuristics
-         double[ ] betaNACs = { 1.0 }; //, 1.5, 2.0, 2.5, 3.0 };
-         AlgorithmParameters.heuristics = true;
-         
-         // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 0; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            for( int j = 0; j < betaNACs.length; j++ )
-            {
-                AlgorithmParameters.BETA_NAC = betaNACs[ j ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaNAC value of " + betaNACs[ j ] );
-                doAntSearch( problem, false );
-            }
-        }
-    }
-
-    private static void experiment_2013_07_23( )
-    {
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_07_23";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        // first without the NAC heuristics
-        AlgorithmParameters.heuristics = false;
-        
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 0; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            System.out.println( "\t" + "doing ACO for problem " + problem );
-            doAntSearch( problem, false );
-        }
-        
-        // secondly with the NAC heuristics
-        AlgorithmParameters.heuristics = true;
-        double[ ] betaNACs = { 1.0, 1.25, 1.5, 1.75, 2.0 };    
-        
-         // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 0; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            for( int i = 0; i < betaNACs.length; i++ )
-            {
-                AlgorithmParameters.BETA_NAC = betaNACs[ i ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaNAC value of " + betaNACs[ i ] );
-                doAntSearch( problem, false );
-            }
-        }
-    }
-    
-    private static void experiment_2013_07_24( )
-    {
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_07_24";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        
-        
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 1; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            // first without the NAC heuristics
-            AlgorithmParameters.heuristics = false;
-            System.out.println( "\t" + "doing ACO for problem " + problem );
-            doAntSearch( problem, false );
-            
-            // secondly with the NAC heuristics
-            AlgorithmParameters.heuristics = true;
-            double[ ] betaNACs = { 1.0, 2.0, 3.0, 4.0, 5.0 };    
-        
-            for( int i = 0; i < betaNACs.length; i++ )
-            {
-                AlgorithmParameters.BETA_NAC = betaNACs[ i ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaNAC value of " + betaNACs[ i ] );
-                doAntSearch( problem, false );
-            }
-        }
-        
-        
-    }
-    
-    
-    private static void experiment_2013_07_25( )
-    {
-        Parameters.outputFilePath = "W:\\Research\\Experimentation2013Q3\\2013_07_25";
-
-        System.out.println( "selected path for output files is: " + Parameters.outputFilePath );
-
-        
-        
-        // problem: 0 is CBS, 1 is GDP, 2 is SC
-        for( int problem = 0; problem <= 2; problem++ )
-        {
-            Parameters.problemNumber = problem;
-            
-            // first without the NAC heuristics
-            AlgorithmParameters.heuristics = false;
-            System.out.println( "\t" + "doing ACO for problem " + problem );
-            doAntSearch( problem, false );
-            
-            // secondly with the NAC heuristics
-            AlgorithmParameters.heuristics = true;
-            double[ ] betaNACs = { 1.0, 2.0, 3.0, 4.0, 5.0 };    
-        
-            for( int i = 0; i < betaNACs.length; i++ )
-            {
-                AlgorithmParameters.BETA_NAC = betaNACs[ i ];
-                System.out.println( "\t" + "doing ACO for problem " + problem +
-                                    " with a betaNAC value of " + betaNACs[ i ] );
-                doAntSearch( problem, false );
-            }
-        }
-    }
-     
+  
 }   // end of class
 
 // ------------- end of file ---------------------------------
